@@ -8,7 +8,7 @@
 - **אפליקציית ווב סטטית** (`web/`): מחשבון BH/Holm/BY בדפדפן בלבד (ללא שרת).
 - **SSM Guardrail**: ברירת־מחדל N=1000, `Var_eff = 1 + 2/(N-3)` ו-`gamma > 1`; לעולם לא נטען ש-variance=1.000.
 - **Board One‑Pager** (`export/board.md`): דף החלטה תמציתי לדרג הנהלה.
-- **דוגמאות** (`examples/`): קבצי CSV להפעלה מהירה.
+- **דוגמאות** (`examples/`): קבצי CSV להפעלה מהירה, כולל `demo_ihw.csv` להדגמת IHW.
 - **רישיון**: CC0 1.0 Universal.
 
 ## תרשים החלטה (תמצית)
@@ -36,6 +36,9 @@ mcc tukey --csv examples/demo_anova.csv --group group --value value --alpha 0.05
 
 # המלצת שיטה לפי הקשר
 mcc decide --context product_ab --m 50 --cost_fp high --online false
+
+# IHW + BY לדוגמה עם קו-ווריאנט
+mcc ihw-example --csv examples/demo_ihw.csv --p pval --covariate covariate --alpha 0.05 --out results_ihw.csv
 ```
 למידע מפורט: `mcc --help`.
 
