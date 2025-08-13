@@ -32,7 +32,10 @@ mcc --help
 mcc correct --csv examples/demo_pvalues.csv --col pval --alpha 0.05 --method fdr_bh --out results_bh.csv
 
 # עם גרף BH המציג את סף הדחייה
-mcc correct --csv examples/demo_pvalues.csv --col pval --alpha 0.05 --method fdr_bh --out results_bh.csv --plot
+mcc correct --csv examples/demo_pvalues.csv --col pval --alpha 0.05 --method fdr_bh --out results_bh.csv --bh-plot --plot-out bh_plot.png
+
+# Benjamini–Yekutieli עם IHW (הדגמה)
+mcc ihw-example --csv examples/demo_ihw.csv --p pval --covariate cov --alpha 0.05 --bins 5 --out results_ihw.csv
 
 # Tukey HSD לאחר ANOVA
 mcc tukey --csv examples/demo_anova.csv --group group --value value --alpha 0.05
