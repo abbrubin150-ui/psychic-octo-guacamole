@@ -31,6 +31,9 @@ mcc --help
 # תיקון BH/By/Holm לערכי p מתוך CSV (עמודה pval)
 mcc correct --csv examples/demo_pvalues.csv --col pval --alpha 0.05 --method fdr_bh --out results_bh.csv
 
+# עם גרף BH המציג את סף הדחייה
+mcc correct --csv examples/demo_pvalues.csv --col pval --alpha 0.05 --method fdr_bh --out results_bh.csv --plot
+
 # Tukey HSD לאחר ANOVA
 mcc tukey --csv examples/demo_anova.csv --group group --value value --alpha 0.05
 
