@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mc-cc0"
+version = "0.1.0"
+description = "CC0 Multiple-Comparisons Toolkit (FWER/FDR) with SSM Guardrail"
+authors = [{name = "Anonymous", email = "anon@example.com"}]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = [
+  "numpy>=1.23",
+  "pandas>=2.0",
+  "statsmodels>=0.14",
+  "matplotlib>=3.7",
+]
+
+[project.scripts]
+mcc = "mc_cc0.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

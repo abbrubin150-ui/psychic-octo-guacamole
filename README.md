@@ -1,31 +1,51 @@
+# Multiple-Comparisons CC0 Toolkit (FWER/FDR) — עם שמירת SSM-Guardrail
 
-Multiple-Comparisons CC0 Toolkit (FWER/FDR) — with SSM Guardrail
-Project Purpose:
-A lightweight CC0 package for multiple-comparisons control (FWER/FDR), including Python CLI code, a static web app (HTML+JS), and ready-to-use code snippets for reports.
-Built on the principles of OpenDecision-SSM: transparent decision-making, controlled conservatism, and a clear separation between confirmatory and exploratory inference.
+**מטרת הפרויקט:** חבילת CC0 קלה לשימוש לבקרת השוואות מרובות (FWER/FDR), עם קוד Python, אפליקציית ווב סטטית (HTML+JS), 
+וקטעי קוד לדוחות. בנוי לפי עקרונות OpenDecision‑SSM: קבלת החלטות שקופה, שמרנות מבוקרת, והפרדה בין אישוש לאמידה.
 
-What’s Included
-Python CLI: Corrections via Bonferroni / Holm / Hochberg / Hommel / BH / BY; Tukey HSD; automatic method selection via decision flow.
+## מה כלול
+- **CLI בפייתון**: תיקוני Bonferroni/Holm/Hochberg/Hommel/BH/BY; Tukey HSD; בחירת שיטה לפי תרשים החלטה.
+- **אפליקציית ווב סטטית** (`web/`): מחשבון BH/Holm/BY בדפדפן בלבד (ללא שרת).
+- **SSM Guardrail**: ברירת־מחדל N=1000, `Var_eff = 1 + 2/(N-3)` ו-`gamma > 1`; לעולם לא נטען ש-variance=1.000.
+- **Board One‑Pager** (`export/board.md`): דף החלטה תמציתי לדרג הנהלה.
+- **דוגמאות** (`examples/`): קבצי CSV להפעלה מהירה.
+- **רישיון**: CC0 1.0 Universal.
 
-Static Web App (web/): Browser-only calculator for BH / Holm / BY (no server required).
+## תרשים החלטה (תמצית)
+- **FWER** אם עלות FP גבוהה → **Holm** (דיפולט); באי־תלות חזקה → **Hochberg**; תלות מורכבת → **Westfall‑Young / Hommel**.
+- **FDR** למחקר גישושני → **BH** (אי־תלות/PRDS), **BY** (תלות שרירותית), אפשר **IHW/Storey** כשיש קו־ווריאנטים.
+- **ANOVA**: כל הזוגות → **Tukey HSD**; קונטרסטים כלליים → **Scheffé**.
+- **Online/רציף**: **Online FDR** (SAFFRON/LORD), או **alpha‑spending**.
+- **רווחי סמך סימולטניים**: FWER בלבד (Bonferroni/Holm/Tukey/Scheffé).
 
-SSM Guardrail: Default N = 1000, Var_eff = 1 + 2/(N-3) and gamma > 1; variance is never reported as exactly 1.000.
+ראו `export/board.md` לתרשים מפורט ודוגמאות.
 
-Board One-Pager (export/board.md): Concise decision sheet for executive teams.
+## התקנה מהירה
+```bash
+pip install -e .
+mcc --help
+```
 
-Examples (examples/): Sample CSV files for quick runs.
+## שימוש מהיר (CLI)
+```bash
+# תיקון BH/By/Holm לערכי p מתוך CSV (עמודה pval)
+mcc correct --csv examples/demo_pvalues.csv --col pval --alpha 0.05 --method fdr_bh --out results_bh.csv
 
-License: CC0 1.0 Universal.
+# Tukey HSD לאחר ANOVA
+mcc tukey --csv examples/demo_anova.csv --group group --value value --alpha 0.05
 
-Decision Flow (Summary)
-FWER if false positive cost is high → Holm (default); under strong independence → Hochberg; complex dependence → Westfall–Young / Hommel.
+# המלצת שיטה לפי הקשר
+mcc decide --context product_ab --m 50 --cost_fp high --online false
+```
+למידע מפורט: `mcc --help`.
 
-FDR for exploratory research → BH (independence/PRDS), BY (arbitrary dependence), optionally IHW / Storey when covariates are available.
+## SSM Guardrail
+- ברירת־מחדל **N=1000** למדגמים תפעוליים; אם N<N_min → אזהרה וחסימה רכה.
+- **Var_eff = 1 + 2/(N-3)**; נוודא `gamma > 1` בכל חישוב עוצמה; לעולם לא נטען `variance=1.000`.
+- מטרת הגארדרייל: למנוע החלטות על דגימות קטנות/מופרעות, לשמור על ריסון מוסרי־תפעולי.
 
-ANOVA: All pairwise comparisons → Tukey HSD; general contrasts → Scheffé.
+## אפליקציה סטטית
+פתחו `web/index.html` מקומית — הזינו רשימת ערכי p, בחרו α ושיטה (BH/BY/Holm), וקבלו תגליות ו‑adjusted p‑values — ללא אינטרנט.
 
-Online/Sequential: Online FDR (SAFFRON / LORD) or alpha-spending.
-
-Simultaneous Confidence Intervals: FWER-only (Bonferroni / Holm / Tukey / Scheffé).
-
-See export/board.md for a detailed flowchart and examples.
+## קרדיט מדעי (Primary)
+Benjamini & Hochberg (1995); Benjamini & Yekutieli (2001); Holm (1979); Hochberg (1988); Hommel (1988); Tukey (1949); Westfall & Young (1993); Storey (2002).

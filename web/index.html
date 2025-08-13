@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multiple Comparisons CC0 — BH/BY/Holm</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <h1>Multiple Comparisons (BH/BY/Holm) — אפליקציה סטטית</h1>
+    <section class="panel">
+      <label>הדבק/י ערכי p (מופרדים בפסיקים או שורות):</label>
+      <textarea id="pvals" rows="6" placeholder="0.005, 0.012, 0.03, 0.045, 0.055, 0.2, 0.4, 0.6, 0.8, 0.9"></textarea>
+      <div class="row">
+        <label>α / q:</label><input id="alpha" type="number" value="0.05" step="0.001" min="0" max="1">
+        <label>שיטה:</label>
+        <select id="method">
+          <option value="fdr_bh">Benjamini–Hochberg (FDR)</option>
+          <option value="fdr_by">Benjamini–Yekutieli (FDR, תלות כללית)</option>
+          <option value="holm">Holm (FWER)</option>
+        </select>
+        <button id="run">הרצה</button>
+      </div>
+      <div id="out"></div>
+    </section>
+    <footer>
+      <p>CC0 — אין זכויות שמורות. חישוב בדפדפן בלבד.</p>
+    </footer>
+  </main>
+<script src="app.js"></script>
+</body>
+</html>
