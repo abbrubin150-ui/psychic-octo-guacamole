@@ -1,5 +1,8 @@
 # Multiple-Comparisons CC0 Toolkit (FWER/FDR) — עם שמירת SSM-Guardrail
 
+[![CI](https://github.com/<user>/psychic-octo-guacamole/actions/workflows/ci.yml/badge.svg)](https://github.com/<user>/psychic-octo-guacamole/actions/workflows/ci.yml)
+[![Pages](https://img.shields.io/badge/Pages-live-blue?logo=github)](https://<user>.github.io/psychic-octo-guacamole/)
+
 **מטרת הפרויקט:** חבילת CC0 קלה לשימוש לבקרת השוואות מרובות (FWER/FDR), עם קוד Python, אפליקציית ווב סטטית (HTML+JS), 
 וקטעי קוד לדוחות. בנוי לפי עקרונות OpenDecision‑SSM: קבלת החלטות שקופה, שמרנות מבוקרת, והפרדה בין אישוש לאמידה.
 
