@@ -28,14 +28,8 @@ mcc --help
 
 ## שימוש מהיר (CLI)
 ```bash
-# תיקון BH/By/Holm לערכי p מתוך CSV (עמודה pval)
+# תיקון BH/BY/Holm לערכי p מתוך CSV (עמודה pval)
 mcc correct --csv examples/demo_pvalues.csv --col pval --alpha 0.05 --method fdr_bh --out results_bh.csv
-
-# עם גרף BH המציג את סף הדחייה
-mcc correct --csv examples/demo_pvalues.csv --col pval --alpha 0.05 --method fdr_bh --out results_bh.csv --bh-plot --plot-out bh_plot.png
-
-# Benjamini–Yekutieli עם IHW (הדגמה)
-mcc ihw-example --csv examples/demo_ihw.csv --p pval --covariate cov --alpha 0.05 --bins 5 --out results_ihw.csv
 
 # Tukey HSD לאחר ANOVA
 mcc tukey --csv examples/demo_anova.csv --group group --value value --alpha 0.05
@@ -45,6 +39,35 @@ mcc decide --context product_ab --m 50 --cost_fp high --online false
 ```
 למידע מפורט: `mcc --help`.
 
+### BH Step-Up Plot (CLI)
+
+```bash
+mcc correct \
+  --csv examples/demo_pvalues.csv \
+  --col pval \
+  --alpha 0.05 \
+  --method fdr_bh \
+  --bh-plot \
+  --plot-out bh_plot.png \
+  --out results_corrected.csv
+```
+
+פלט: `results_corrected.csv` + `bh_plot.png`.
+
+### BY with IHW (Weighted FDR)
+
+```bash
+mcc ihw-example \
+  --csv your_data.csv \
+  --p pval \
+  --covariate quality_or_se \
+  --alpha 0.05 \
+  --bins 5 \
+  --out results_by_ihw.csv
+```
+
+פלט: `results_by_ihw.csv` עם עמודות `weight`, `p_adj`, `reject`.
+
 ## SSM Guardrail
 - ברירת־מחדל **N=1000** למדגמים תפעוליים; אם N<N_min → אזהרה וחסימה רכה.
 - **Var_eff = 1 + 2/(N-3)**; נוודא `gamma > 1` בכל חישוב עוצמה; לעולם לא נטען `variance=1.000`.
@@ -52,6 +75,8 @@ mcc decide --context product_ab --m 50 --cost_fp high --online false
 
 ## אפליקציה סטטית
 פתחו `web/index.html` מקומית — הזינו רשימת ערכי p, בחרו α ושיטה (BH/BY/Holm), וקבלו תגליות ו‑adjusted p‑values — ללא אינטרנט.
+
+גרסה מקוונת זמינה ב‑GitHub Pages: https://<user>.github.io/psychic-octo-guacamole/
 
 ## קרדיט מדעי (Primary)
 Benjamini & Hochberg (1995); Benjamini & Yekutieli (2001); Holm (1979); Hochberg (1988); Hommel (1988); Tukey (1949); Westfall & Young (1993); Storey (2002).
