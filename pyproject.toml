@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mc-cc0"
-version = "0.1.0"
+version = "0.2.0"
 description = "CC0 Multiple-Comparisons Toolkit (FWER/FDR) with SSM Guardrail"
 authors = [{name = "Anonymous", email = "anon@example.com"}]
 readme = "README.md"
@@ -15,6 +15,11 @@ dependencies = [
   "pandas>=2.0",
   "statsmodels>=0.14",
   "matplotlib>=3.7", # required for --plot flag
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest"
 ]
 
 [project.scripts]
