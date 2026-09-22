@@ -24,16 +24,16 @@ npx expo start
 
 ## APK
 
-Every push to `main` runs **Build Android APK**.
+Every push to `main` runs **Build Android APK** and produces a standalone release APK with the JavaScript bundle embedded.
 
 In GitHub:
 
 1. Open **Actions**.
 2. Open the latest **Build Android APK** run.
-3. Download the artifact named `poemspace95-android-apk`.
-4. Extract `app-debug.apk` and install it on Android.
+3. Download the artifact named `poemspace95-android-release-apk`.
+4. Extract `app-release.apk` and install it on Android.
 
-This is a debug-signed APK intended for direct installation/testing. No Expo account or cloud token is required for this build path.
+The workflow verifies that `assets/index.android.bundle` is packaged and that the APK signature is valid, so the installed app does not require Metro or a development computer.
 
 ## Architecture
 
