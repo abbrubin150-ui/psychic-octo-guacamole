@@ -216,7 +216,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" backgroundColor={win95.blue} />
+      <StatusBar style="light" />
       <View style={styles.desktop}>
         <Window title="PoemSpace 95 — ארכיון שירה">
           <View style={styles.menuBar}>
