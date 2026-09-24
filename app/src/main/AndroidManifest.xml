@@ -1,9 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:allowBackup="true"
-        android:label="Pixel Physics Sandbox"
+        android:label="Pixel Physics Enterprise"
         android:theme="@style/AppTheme"
-        android:hardwareAccelerated="true">
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="false">
         <activity
             android:name=".AndroidLauncher"
             android:screenOrientation="landscape"
