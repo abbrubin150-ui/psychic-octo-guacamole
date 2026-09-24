@@ -291,6 +291,12 @@ public final class PixelPhysicsVoxelView extends View {
         float penetration;
         float friction;
         float restitution;
+
+        // Accumulated sequential-impulse state, valid for one substep manifold.
+        float normalImpulse;
+        float frictionImpulseX,frictionImpulseY,frictionImpulseZ;
+        boolean targetVelocityInitialized;
+        float targetNormalVelocity;
     }
 
     private static final class Hit2 {
@@ -1184,20 +1190,32 @@ public final class PixelPhysicsVoxelView extends View {
 
         float rvx=vbx-vax,rvy=vby-vay,rvz=vbz-vaz;
         float vn=rvx*c.nx+rvy*c.ny+rvz*c.nz;
-        if(vn>=0f)return;
+        float impactSpeed=Math.max(0f,-vn);
+
+        if(!c.targetVelocityInitialized){
+            c.targetVelocityInitialized=true;
+            c.targetNormalVelocity=impactSpeed>RESTITUTION_VELOCITY_THRESHOLD
+                    ? c.restitution*impactSpeed
+                    : 0f;
+        }
 
         float ran=rax*c.ny-ray*c.nx;
         float rbn=rbx*c.ny-rby*c.nx;
         float k=ia+ib+ran*ran*iia+rbn*rbn*iib;
         if(k<1e-8f)return;
 
-        float impactSpeed=-vn;
-        float e=impactSpeed>RESTITUTION_VELOCITY_THRESHOLD?c.restitution:0f;
-        float j=-(1f+e)*vn/k;
-        applyImpulse(a,-j*c.nx,-j*c.ny,-j*c.nz,rax,ray);
-        if(b!=null)applyImpulse(b,j*c.nx,j*c.ny,j*c.nz,rbx,rby);
+        // Accumulate and clamp the unilateral normal constraint.
+        float lambda=-(vn-c.targetNormalVelocity)/k;
+        float oldNormal=c.normalImpulse;
+        c.normalImpulse=Math.max(0f,oldNormal+lambda);
+        float deltaNormal=c.normalImpulse-oldNormal;
 
-        if(j>0.015f && impactSpeed>0.25f){
+        if(Math.abs(deltaNormal)>1e-8f){
+            applyImpulse(a,-deltaNormal*c.nx,-deltaNormal*c.ny,-deltaNormal*c.nz,rax,ray);
+            if(b!=null)applyImpulse(b,deltaNormal*c.nx,deltaNormal*c.ny,deltaNormal*c.nz,rbx,rby);
+        }
+
+        if(deltaNormal>0.015f && impactSpeed>0.25f){
             a.wake();
             if(b!=null)b.wake();
         }
@@ -1209,33 +1227,55 @@ public final class PixelPhysicsVoxelView extends View {
         vbz=b==null?0f:b.vz;
         rvx=vbx-vax;rvy=vby-vay;rvz=vbz-vaz;
 
-        float vtX=rvx-c.nx*(rvx*c.nx+rvy*c.ny+rvz*c.nz);
-        float vtY=rvy-c.ny*(rvx*c.nx+rvy*c.ny+rvz*c.nz);
-        float vtZ=rvz-c.nz*(rvx*c.nx+rvy*c.ny+rvz*c.nz);
+        float rvn=rvx*c.nx+rvy*c.ny+rvz*c.nz;
+        float vtX=rvx-c.nx*rvn;
+        float vtY=rvy-c.ny*rvn;
+        float vtZ=rvz-c.nz*rvn;
         float vtLen=(float)Math.sqrt(vtX*vtX+vtY*vtY+vtZ*vtZ);
-        if(vtLen<1e-6f)return;
-        float tx=vtX/vtLen,ty=vtY/vtLen,tz=vtZ/vtLen;
 
-        float rat=rax*ty-ray*tx;
-        float rbt=rbx*ty-rby*tx;
-        float kt=ia+ib+rat*rat*iia+rbt*rbt*iib;
-        if(kt<1e-8f)return;
-        float jt=-(rvx*tx+rvy*ty+rvz*tz)/kt;
-        float dynamicLimit=c.friction*j;
-        float staticLimit=Math.min(1.35f,c.friction*1.24f)*j;
-        if(Math.abs(jt)>staticLimit)jt=Math.copySign(dynamicLimit,jt);
-        else jt=clamp(jt,-staticLimit,staticLimit);
+        if(vtLen>1e-6f && c.normalImpulse>0f){
+            float tx=vtX/vtLen,ty=vtY/vtLen,tz=vtZ/vtLen;
+            float rat=rax*ty-ray*tx;
+            float rbt=rbx*ty-rby*tx;
+            float kt=ia+ib+rat*rat*iia+rbt*rbt*iib;
 
-        applyImpulse(a,-jt*tx,-jt*ty,-jt*tz,rax,ray);
-        if(b!=null)applyImpulse(b,jt*tx,jt*ty,jt*tz,rbx,rby);
+            if(kt>1e-8f){
+                float jt=-vtLen/kt;
 
-        // A single-point 2.5D floor contact otherwise has no torsional friction.
-        // Approximate the distributed contact patch with a bounded angular impulse.
-        if(b==null && Math.abs(c.nz)>0.5f && Math.abs(a.spin)>0.0001f){
+                float proposedX=c.frictionImpulseX+jt*tx;
+                float proposedY=c.frictionImpulseY+jt*ty;
+                float proposedZ=c.frictionImpulseZ+jt*tz;
+                float proposedMag=(float)Math.sqrt(
+                        proposedX*proposedX+proposedY*proposedY+proposedZ*proposedZ);
+
+                float staticLimit=Math.min(1.35f,c.friction*1.24f)*c.normalImpulse;
+                float dynamicLimit=c.friction*c.normalImpulse;
+
+                if(proposedMag>staticLimit && proposedMag>1e-8f){
+                    float scale=dynamicLimit/proposedMag;
+                    proposedX*=scale;proposedY*=scale;proposedZ*=scale;
+                }
+
+                float dix=proposedX-c.frictionImpulseX;
+                float diy=proposedY-c.frictionImpulseY;
+                float diz=proposedZ-c.frictionImpulseZ;
+
+                c.frictionImpulseX=proposedX;
+                c.frictionImpulseY=proposedY;
+                c.frictionImpulseZ=proposedZ;
+
+                applyImpulse(a,-dix,-diy,-diz,rax,ray);
+                if(b!=null)applyImpulse(b,dix,diy,diz,rbx,rby);
+            }
+        }
+
+        // A single-point floor manifold has no finite patch area, so add a
+        // bounded torsional-friction impulse representing the distributed patch.
+        if(b==null && Math.abs(c.nz)>0.5f && Math.abs(a.spin)>0.0001f && c.normalImpulse>0f){
             float invI=a.invInertia();
             if(invI>1e-8f){
                 float desired=-a.spin/invI;
-                float limit=c.friction*j*Math.max(0.01f,a.radius()*0.35f);
+                float limit=c.friction*c.normalImpulse*Math.max(0.01f,a.radius()*0.35f);
                 float angularImpulse=clamp(desired,-limit,limit);
                 a.spin+=angularImpulse*invI;
             }
