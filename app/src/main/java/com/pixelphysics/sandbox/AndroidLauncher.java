@@ -6,7 +6,7 @@ import android.view.Window;
 import android.view.WindowManager;
 
 public class AndroidLauncher extends Activity {
-    private PixelPhysics25DView gameView;
+    private PixelPhysicsVoxelView gameView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
