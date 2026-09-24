@@ -1,48 +1,24 @@
-# PoemSpace 95
+# Pixel Physics Sandbox
 
-Offline-first Android poetry archive with a Windows 95-inspired UI.
+Android-first 3D rigid-body sandbox MVP.
 
-## What works
+## Core interaction
 
-- Hebrew RTL writing and reading.
-- Local SQLite archive; no server is required.
-- Create, edit, delete, favorite and tag poems.
-- Search by title, text or tags.
-- Filter by month (`YYYY-MM`) and sort by writing date.
-- Local TF-IDF + cosine k-means clustering.
-- Corpus statistics and frequent terms.
-- GitHub Actions builds an installable Android APK automatically.
+- Touch a dynamic object to grab at the exact hit point.
+- Drag moves a physical grab target on a camera-parallel plane.
+- Pinch while grabbed changes depth.
+- Two-finger twist applies torque.
+- Release simply removes the grab force; existing rigid-body velocity produces the throw.
+- Touch empty space to orbit; pinch empty space zooms/pans the camera.
 
-## Local development
+## MVP systems
 
-Requirements: Node.js 22.13+.
+Spring-damper manipulator with force cap and partial mass compensation; Bullet rigid-body physics; 12 spawnable props across mahogany, metal and rubber profiles; freeze/unfreeze; delete; duplicate; material cycling; discrete undo; autosave/restore; procedural impact audio; haptics; low-resolution nearest-neighbor world rendering with native-resolution UI.
 
-```bash
-npm install
-npx expo start
-```
+## Build
 
-## APK
+GitHub Actions builds and verifies `PixelPhysicsSandbox-MVP.apk` from the `pixel-physics-mvp` branch/PR. The app is offline after installation.
 
-Every push to `main` runs **Build Android APK** and produces a standalone release APK with the JavaScript bundle embedded.
-
-In GitHub:
-
-1. Open **Actions**.
-2. Open the latest **Build Android APK** run.
-3. Download the artifact named `poemspace95-android-release-apk`.
-4. Extract `app-release.apk` and install it on Android.
-
-The workflow verifies that `assets/index.android.bundle` is packaged and that the APK signature is valid, so the installed app does not require Metro or a development computer.
-
-## Architecture
-
-```text
-App.tsx
- ├─ src/db.ts       SQLite persistence
- ├─ src/analysis.ts TF-IDF, k-means, statistics
- ├─ src/types.ts    domain types
- └─ src/theme.ts    Windows 95 palette
-```
-
-The analysis engine and database are deliberately independent of the UI so they can be tested or replaced later without rewriting the app.
+Package: `com.pixelphysics.sandbox`
+Minimum Android: API 26
+Target/compile SDK: API 35
