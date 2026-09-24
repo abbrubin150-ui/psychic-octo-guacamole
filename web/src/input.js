@@ -35,7 +35,9 @@ export class PointerFusion {
       type: e.pointerType,
       width: e.width || 0,
       height: e.height || 0,
-      pressure: e.pressure || 0
+      pressure: e.pressure || 0,
+      followOffsetX: 0,
+      followOffsetY: 0
     };
     this.ptrs.set(e.pointerId, p);
 
@@ -69,12 +71,16 @@ export class PointerFusion {
         this.mode = "camGesture";
       }
 
+      const first = [...this.ptrs.values()][0];
+      const objectHandoff = this.mode === "objGesture";
       this.gesture = {
         lastDist: dist,
         lastAngle: ang,
         lastMidX: mid.x,
         lastMidY: mid.y,
-        lastT: e.timeStamp * 0.001
+        lastT: e.timeStamp * 0.001,
+        targetOffsetX: objectHandoff ? first.x - mid.x : 0,
+        targetOffsetY: objectHandoff ? first.y - mid.y : 0
       };
     }
   }
@@ -86,12 +92,17 @@ export class PointerFusion {
 
     const samples = e.getCoalescedEvents?.() || [e];
     for (const sample of samples) {
+      const oldX = p.x;
+      const oldY = p.y;
+      const oldT = p.lastT;
+
       p.x = sample.clientX;
       p.y = sample.clientY;
       p.lastT = sample.timeStamp * 0.001;
       p.pressure = sample.pressure || p.pressure;
 
       const travel = Math.hypot(p.x - p.sx, p.y - p.sy);
+      const sampleDt = Math.max(1 / 240, p.lastT - oldT);
 
       if (this.mode === "objPending" && travel > INPUT.dragSlopCssPx) {
         this.mode = "objDrag";
@@ -102,10 +113,20 @@ export class PointerFusion {
       if (this.mode === "objDrag" && this.ptrs.size === 1) {
         const heldMs = Math.max(0, (p.lastT - p.t0) * 1000);
         const assist = INPUT.assistLiftCssPx * Math.min(1, heldMs / INPUT.assistRampMs);
-        this.h.moveGrab?.(p.x, p.y - assist, p.lastT, p.pressure);
+
+        const decay = Math.exp(-sampleDt / 0.11);
+        p.followOffsetX *= decay;
+        p.followOffsetY *= decay;
+
+        this.h.moveGrab?.(
+          p.x + p.followOffsetX,
+          p.y + p.followOffsetY - assist,
+          p.lastT,
+          p.pressure
+        );
       } else if (this.mode === "camOrbit" && this.ptrs.size === 1) {
-        const dx = sample.movementX || 0;
-        const dy = sample.movementY || 0;
+        const dx = p.x - oldX;
+        const dy = p.y - oldY;
         if (travel > 3) this.h.orbit?.(dx, dy, p.lastT);
       }
     }
@@ -130,9 +151,13 @@ export class PointerFusion {
     const dt = Math.max(1 / 240, timeSec - g.lastT);
 
     if (this.mode === "objGesture") {
+      const decay = Math.exp(-dt / 0.12);
+      g.targetOffsetX *= decay;
+      g.targetOffsetY *= decay;
+
       this.h.gestureGrab?.({
-        x: mid.x,
-        y: mid.y,
+        x: mid.x + g.targetOffsetX,
+        y: mid.y + g.targetOffsetY,
         depthDeltaPx: dd,
         twistDelta: da,
         dt,
@@ -168,6 +193,16 @@ export class PointerFusion {
 
     if (this.ptrs.size === 1) {
       const remaining = [...this.ptrs.values()][0];
+      const oldGesture = this.gesture;
+
+      if (this.mode === "objGesture" && oldGesture) {
+        remaining.followOffsetX = oldGesture.lastMidX - remaining.x;
+        remaining.followOffsetY = oldGesture.lastMidY - remaining.y;
+      } else {
+        remaining.followOffsetX = 0;
+        remaining.followOffsetY = 0;
+      }
+
       remaining.sx = remaining.x;
       remaining.sy = remaining.y;
       remaining.t0 = e.timeStamp * 0.001;
