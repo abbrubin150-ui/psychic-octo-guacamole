@@ -1,0 +1,17 @@
+{
+  "name": "pixel-physics-enterprise-v8",
+  "private": true,
+  "version": "0.8.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.18.0",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.9"
+  }
+}
