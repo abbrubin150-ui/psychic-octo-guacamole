@@ -28,6 +28,7 @@ public final class PixelPhysicsView extends View {
 
     private float presentScale=1f, presentX=0, presentY=0, presentW=VW, presentH=VH;
     private boolean running=true;
+    private Throwable fatalError;
     private long lastNs=0;
     private float accumulator=0, autosave=0;
 
@@ -99,9 +100,13 @@ public final class PixelPhysicsView extends View {
         p.setTypeface(Typeface.create(Typeface.MONOSPACE,Typeface.BOLD));
         nearest.setAntiAlias(false); nearest.setFilterBitmap(false); nearest.setDither(false);
         prefs=context.getSharedPreferences("pixel-physics-native-25d-v1",Context.MODE_PRIVATE);
-        buildStatics();
-        createSprites();
-        if(!restoreWorld()) createStarterSet();
+        try {
+            buildStatics();
+            createSprites();
+            if(!restoreWorld()) createStarterSet();
+        } catch (Throwable t) {
+            fatalError=t;
+        }
         lastNs=System.nanoTime();
     }
 
@@ -121,19 +126,50 @@ public final class PixelPhysicsView extends View {
 
     @Override protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
-        long now=System.nanoTime();
-        float delta=Math.min(.05f,(now-lastNs)/1_000_000_000f);
-        lastNs=now;
-        if(running){
-            if(checkLongPress(now)){}
-            accumulator=Math.min(MAX_ACCUM,accumulator+delta);
-            while(accumulator>=DT){updateGrab(DT);physicsStep(DT);accumulator-=DT;}
-            autosave+=delta;if(autosave>3f){autosave=0;saveWorld();}
+        if(fatalError!=null){
+            drawFatal(canvas,fatalError);
+            return;
         }
-        drawFrame();
-        canvas.drawColor(Color.rgb(12,16,22));
-        canvas.drawBitmap(frame,null,dst,nearest);
-        if(running)postInvalidateOnAnimation();
+        try {
+            long now=System.nanoTime();
+            float delta=Math.min(.05f,(now-lastNs)/1_000_000_000f);
+            lastNs=now;
+            if(running){
+                checkLongPress(now);
+                accumulator=Math.min(MAX_ACCUM,accumulator+delta);
+                while(accumulator>=DT){updateGrab(DT);physicsStep(DT);accumulator-=DT;}
+                autosave+=delta;if(autosave>3f){autosave=0;saveWorld();}
+            }
+            drawFrame();
+            canvas.drawColor(Color.rgb(12,16,22));
+            canvas.drawBitmap(frame,null,dst,nearest);
+            if(running)postInvalidateOnAnimation();
+        } catch (Throwable t) {
+            fatalError=t;
+            running=false;
+            drawFatal(canvas,t);
+        }
+    }
+
+    private void drawFatal(Canvas canvas,Throwable t){
+        canvas.drawColor(Color.rgb(20,18,22));
+        p.setStyle(Paint.Style.FILL);
+        p.setTypeface(Typeface.MONOSPACE);
+        p.setAntiAlias(false);
+        p.setColor(Color.rgb(255,210,100));
+        p.setTextSize(28f);
+        canvas.drawText("PIXEL PHYSICS SAFE MODE",24,48,p);
+        p.setColor(Color.WHITE);
+        p.setTextSize(18f);
+        String name=t==null?"Unknown":t.getClass().getSimpleName();
+        canvas.drawText("Runtime error: "+name,24,82,p);
+        String msg=t==null?null:t.getMessage();
+        if(msg!=null){
+            if(msg.length()>70)msg=msg.substring(0,70);
+            canvas.drawText(msg,24,112,p);
+        }
+        p.setTextSize(15f);
+        canvas.drawText("The process stayed alive instead of crashing.",24,150,p);
     }
 
     private boolean checkLongPress(long now){
@@ -429,6 +465,18 @@ public final class PixelPhysicsView extends View {
     private float friction(MaterialKind m){return m==MaterialKind.RUBBER?.85f:(m==MaterialKind.METAL?.45f:.68f);}
 
     @Override public boolean onTouchEvent(MotionEvent e){
+        if(fatalError!=null)return true;
+        try {
+            return handleTouchEvent(e);
+        } catch (Throwable t) {
+            fatalError=t;
+            running=false;
+            invalidate();
+            return true;
+        }
+    }
+
+    private boolean handleTouchEvent(MotionEvent e){
         int action=e.getActionMasked(),idx=e.getActionIndex();
         if(action==MotionEvent.ACTION_DOWN){
             if(!inside(e.getX(),e.getY()))return true;
