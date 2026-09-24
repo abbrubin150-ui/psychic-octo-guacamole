@@ -36,26 +36,28 @@ jobs:
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n pixelphysics -k "system-images;android-35;google_apis;x86_64" --force
       - name: Emulator smoke test
         run: |
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          test -x "$ADB"
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm || true; fi
           nohup "$ANDROID_HOME/emulator/emulator" -avd pixelphysics -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect >/tmp/emulator.log 2>&1 &
-          adb wait-for-device
+          "$ADB" wait-for-device
           for i in $(seq 1 90); do
-            BOOT="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            BOOT="$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
             [ "$BOOT" = "1" ] && break
             sleep 3
           done
-          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
-          adb install -r PixelPhysicsSandbox-MVP.apk
-          adb logcat -c
-          adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
+          test "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = "1"
+          "$ADB" install -r PixelPhysicsSandbox-MVP.apk
+          "$ADB" logcat -c
+          "$ADB" shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
           sleep 8
-          PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
+          PID="$("$ADB" shell pidof com.pixelphysics.sandbox | tr -d '\r')"
           test -n "$PID"
-          if adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
-            adb logcat -d -b crash
+          if "$ADB" logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
+            "$ADB" logcat -d -b crash
             exit 1
           fi
-          adb exec-out screencap -p > pixel-physics-smoke.png
+          "$ADB" exec-out screencap -p > pixel-physics-smoke.png
           test -s pixel-physics-smoke.png
           echo "Smoke test process PID: $PID"
       - uses: actions/upload-artifact@v4
