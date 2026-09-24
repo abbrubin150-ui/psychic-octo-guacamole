@@ -1,33 +1,51 @@
-# Pixel Physics Sandbox
+# Pixel Physics Sandbox — Pure 2D Pixel Edition
 
-Android-first 3D rigid-body sandbox MVP.
+A direct-touch physics sandbox rebuilt as a **pure 2D pixel-art game**.
 
-## Core interaction
+## Visual invariant
 
-- Touch a dynamic object to grab at the exact hit point.
-- Drag moves a physical grab target on a camera-parallel plane.
-- Pinch while grabbed changes depth.
-- Two-finger twist applies torque.
-- Release simply removes the grab force; existing rigid-body velocity produces the throw.
-- Touch empty space to orbit; pinch empty space zooms/pans the camera.
+There is no 3D renderer, no mesh pipeline, no perspective camera, and no Bullet physics.
 
-## MVP systems
+The game renders to a fixed 480×270 canvas and scales with nearest-neighbor integer scaling.
 
-Spring-damper manipulator with force cap and partial mass compensation; Bullet rigid-body physics; 12 spawnable props across mahogany, metal and rubber profiles; freeze/unfreeze; delete; duplicate; material cycling; discrete undo; autosave/restore; procedural impact audio; haptics; low-resolution nearest-neighbor world rendering with native-resolution UI.
+Every prop is represented by **four separately authored pixel sprites**:
 
-## Build
+- 0°
+- 90°
+- 180°
+- 270°
 
-GitHub Actions builds and verifies `PixelPhysicsSandbox-MVP.apk` from the `pixel-physics-mvp` branch/PR. The app is offline after installation.
+The renderer never rotates a sprite image. Box2D may simulate continuous rotation, but the visual representation selects the nearest authored directional frame.
+
+The Spawn Drawer uses the same four-frame sprite sets and cycles through them as a visible verification that each icon has multiple authored directions.
+
+## Physics
+
+- Box2D 2D rigid bodies
+- direct touch grab at the actual contact point
+- spring-damper force coupling
+- partial mass compensation
+- natural release/throw
+- two-finger torque
+- freeze/unfreeze
+- delete / duplicate
+- discrete undo
+- autosave
+
+## Pixel assets
+
+The MVP contains four-direction sprite sets for:
+
+Cube, Beam Short, Beam Long, Plank, Wood Ball, Metal Ball, Weight, Wheel, Rubber Ball, Barrel, Crate, and Ramp.
+
+Each material has a restricted hand-authored palette: mahogany, metal, and rubber.
+
+## Android
 
 Package: `com.pixelphysics.sandbox`
+
+Version: `0.2.0-pure-2d-pixel`
+
 Minimum Android: API 26
-Target/compile SDK: API 35
 
-CI additionally installs the APK on an Android 15 x86_64 emulator, launches the main activity, checks that the app process remains alive, checks the crash buffer, and captures a smoke-test screenshot using a managed Android 15 emulator runner.
-
-The verified APK artifact is produced independently of the optional emulator smoke job, so CI infrastructure around AVD boot cannot block delivery of a structurally verified install package.
-
-
-## True pixel-art renderer
-
-The game now renders the entire world and HUD into a fixed 480x270 pixel canvas before nearest-neighbor integer upscaling. Mahogany, metal, rubber, workshop wood, floor and dark-metal surfaces are authored as deterministic 16x16/32x32 pixel textures rather than smooth PBR materials. UI panels, object markers, menus and text are rendered on the same pixel canvas so the visual language is consistent end-to-end.
+Target SDK: API 35
