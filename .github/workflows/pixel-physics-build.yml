@@ -63,7 +63,13 @@ jobs:
             adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
             sleep 8
             PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
-            test -n "$PID"
+            if [ -z "$PID" ]; then
+              echo "APP_PROCESS_MISSING"
+              adb logcat -d -b crash || true
+              adb logcat -d -v threadtime | tail -400 || true
+              adb shell dumpsys activity exit-info com.pixelphysics.sandbox || true
+              exit 1
+            fi
             if adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
               adb logcat -d -b crash
               exit 1
