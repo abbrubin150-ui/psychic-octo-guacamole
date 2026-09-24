@@ -235,6 +235,11 @@ public final class PixelPhysicsVoxelView extends View {
         float radius() {
             return Math.max(type.wMeters(), type.dMeters()) * 0.5f;
         }
+        float broadRadius() {
+            if(circleFootprint())return radius();
+            float hw=halfW(),hd=halfD();
+            return (float)Math.sqrt(hw*hw+hd*hd);
+        }
         float halfW() { return type.wMeters()*0.5f; }
         float halfD() { return type.dMeters()*0.5f; }
         float bottom() { return z-type.hMeters()*0.5f; }
@@ -823,6 +828,13 @@ public final class PixelPhysicsVoxelView extends View {
     }
 
     private void addPairContact(Prop a,Prop b) {
+        float zReach=(a.type.hMeters()+b.type.hMeters())*0.5f+CONTACT_SLOP*2f;
+        if(Math.abs(a.z-b.z)>zReach)return;
+
+        float dxBroad=b.x-a.x,dyBroad=b.y-a.y;
+        float rr=a.broadRadius()+b.broadRadius()+CONTACT_SLOP*2f;
+        if(dxBroad*dxBroad+dyBroad*dyBroad>rr*rr)return;
+
         Hit2 h=horizontalHit(a,b);
         if(!h.hit)return;
 
@@ -1134,6 +1146,9 @@ public final class PixelPhysicsVoxelView extends View {
         for(int i=0;i<props.size();i++){
             Prop q=props.get(i);
             if(q==p)continue;
+            float dx=q.x-p.x,dy=q.y-p.y;
+            float rr=p.broadRadius()+q.broadRadius()+CONTACT_SLOP*4f;
+            if(dx*dx+dy*dy>rr*rr)continue;
             Hit2 h=horizontalHit(p,q);
             if(!h.hit)continue;
             float top=q.type==PropType.STAIRS?stairTopAt(q,p.x,p.y,p.radius()*0.15f):q.top();
