@@ -1,22 +1,36 @@
 package com.pixelphysics.sandbox;
 
+import android.app.Activity;
 import android.os.Bundle;
-import com.badlogic.gdx.backends.android.AndroidApplication;
-import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration;
+import android.view.Window;
+import android.view.WindowManager;
 
-public class AndroidLauncher extends AndroidApplication {
+public class AndroidLauncher extends Activity {
+    private PixelPhysics25DView gameView;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        AndroidApplicationConfiguration cfg = new AndroidApplicationConfiguration();
-        cfg.useImmersiveMode = false;
-        cfg.useWakelock = false;
-        cfg.useAccelerometer = false;
-        cfg.useCompass = false;
-        cfg.useGyroscope = false;
-        cfg.disableAudio = true;
+        gameView = new PixelPhysics25DView(this);
+        setContentView(gameView);
+    }
 
-        initialize(new PixelPhysics25DGame(), cfg);
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (gameView != null) gameView.setKeepScreenOn(false);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (gameView != null) {
+            gameView.setKeepScreenOn(true);
+            gameView.requestFocus();
+        }
     }
 }
