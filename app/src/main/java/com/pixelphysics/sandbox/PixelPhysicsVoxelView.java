@@ -59,10 +59,22 @@ public final class PixelPhysicsVoxelView extends View {
     private static final float ORIGIN_X = 240f;
     private static final float ORIGIN_Y = 160f;
 
-    private static final float FIXED_DT = 1f / 60f;
-    private static final float MAX_ACCUM = 0.12f;
+    // Physics v7: 120 Hz fixed step, iterative impulse solver and conservative substeps.
+    private static final float FIXED_DT = 1f / 120f;
+    private static final float MAX_ACCUM = 0.10f;
     private static final float GRAVITY = 9.81f;
     private static final int MAX_PROPS = 100;
+    private static final int VELOCITY_ITERS = 9;
+    private static final int POSITION_ITERS = 4;
+    private static final int MAX_SUBSTEPS = 4;
+    private static final float MAX_TRAVEL_PER_SUBSTEP = 0.018f;
+    private static final float CONTACT_SLOP = 0.0012f;
+    private static final float POSITION_PERCENT = 0.68f;
+    private static final float RESTITUTION_THRESHOLD = 0.55f;
+    private static final float SLEEP_LINEAR = 0.022f;
+    private static final float SLEEP_VERTICAL = 0.022f;
+    private static final float SLEEP_ANGULAR = 0.075f;
+    private static final float SLEEP_DELAY = 0.65f;
 
     private final Paint paint = new Paint();
     private final Paint pixelPaint = new Paint();
@@ -81,6 +93,8 @@ public final class PixelPhysicsVoxelView extends View {
     private final ArrayList<Prop> drawOrder = new ArrayList<>();
     private final HashMap<Integer, Prop> byId = new HashMap<>();
     private final ArrayDeque<UndoAction> undo = new ArrayDeque<>();
+    private final ArrayList<Contact> contacts = new ArrayList<>();
+    private final PhysicsMath25D.Manifold manifoldScratch = new PhysicsMath25D.Manifold();
 
     private final HashMap<PropType, VoxelModel> models = new HashMap<>();
     private final HashMap<String, Bitmap[]> voxelSpriteCache = new HashMap<>();
@@ -214,12 +228,51 @@ public final class PixelPhysicsVoxelView extends View {
         float yaw;
         float spin;
         boolean frozen;
+        boolean grounded;
+        boolean sleeping;
+        float sleepTimer;
+
+        final PhysicsMath25D.Shape shape = new PhysicsMath25D.Shape();
 
         float radius() {
             return Math.max(type.wMeters(), type.dMeters()) * 0.5f;
         }
-        float bottom() { return z-type.hMeters()*0.5f; }
-        float top() { return z+type.hMeters()*0.5f; }
+        float halfW() { return type.wMeters()*0.5f; }
+        float halfD() { return type.dMeters()*0.5f; }
+        float halfH() { return type.hMeters()*0.5f; }
+        float bottom() { return z-halfH(); }
+        float top() { return z+halfH(); }
+
+        boolean circularFootprint() {
+            return type.renderKind==RenderKind.BALL || type==PropType.BARREL;
+        }
+
+        float invMass() {
+            return frozen ? 0f : 1f/Math.max(0.0001f,type.mass);
+        }
+
+        float invInertia() {
+            if(frozen) return 0f;
+            float inertia;
+            if(circularFootprint()) {
+                float r=radius();
+                inertia=0.5f*type.mass*r*r;
+            } else {
+                float w=type.wMeters(),d=type.dMeters();
+                inertia=type.mass*(w*w+d*d)/12f;
+            }
+            return inertia>1e-7f ? 1f/inertia : 0f;
+        }
+
+        void syncShape() {
+            if(circularFootprint()) shape.setCircle(x,y,radius());
+            else shape.setBox(x,y,yaw,halfW(),halfD());
+        }
+
+        void wake() {
+            sleeping=false;
+            sleepTimer=0f;
+        }
 
         SaveState snapshot() {
             SaveState s=new SaveState();
@@ -227,6 +280,14 @@ public final class PixelPhysicsVoxelView extends View {
             s.x=x;s.y=y;s.z=z;s.yaw=yaw;s.frozen=frozen;
             return s;
         }
+    }
+
+    private final class Contact {
+        Prop a,b;
+        boolean vertical;
+        float nx,ny,nz;
+        float penetration;
+        float cx,cy;
     }
 
     private static final class SaveState {
