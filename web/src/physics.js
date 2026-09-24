@@ -62,6 +62,26 @@ export class PhysicsKernel {
     return entity;
   }
 
+  createStaticBox({ mesh, position, halfExtents, friction = 0.82, restitution = 0.02 }) {
+    const body = this.world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
+    );
+    const collider = this.world.createCollider(
+      RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
+        .setFriction(friction)
+        .setRestitution(restitution),
+      body
+    );
+    return this.#registerEntity({
+      body,
+      collider,
+      mesh,
+      dynamic: false,
+      minExtent: Math.min(halfExtents.x, halfExtents.y, halfExtents.z) * 2,
+      material: "environment"
+    });
+  }
+
   spawnBox({ mesh, position, halfExtents, material = "wood", rotation = null }) {
     const density = materialDensity(material);
     let desc = RAPIER.RigidBodyDesc.dynamic()
