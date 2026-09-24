@@ -781,26 +781,30 @@ public final class PixelPhysicsVoxelView extends View {
 
         float left=p.x-ex;
         if(left<=-ROOM+CONTACT_SLOP){
+            float[] cp=supportPoint(p,-1f,0f);
             Contact c=environmentContact(p,-1f,0f,0f,
-                    -ROOM,p.y,p.z,Math.max(0f,-ROOM-left),envFriction,envRest);
+                    cp[0],cp[1],p.z,Math.max(0f,-ROOM-left),envFriction,envRest);
             contacts.add(c);
         }
         float right=p.x+ex;
         if(right>=ROOM-CONTACT_SLOP){
+            float[] cp=supportPoint(p,1f,0f);
             Contact c=environmentContact(p,1f,0f,0f,
-                    ROOM,p.y,p.z,Math.max(0f,right-ROOM),envFriction,envRest);
+                    cp[0],cp[1],p.z,Math.max(0f,right-ROOM),envFriction,envRest);
             contacts.add(c);
         }
         float near=p.y-ey;
         if(near<=-ROOM+CONTACT_SLOP){
+            float[] cp=supportPoint(p,0f,-1f);
             Contact c=environmentContact(p,0f,-1f,0f,
-                    p.x,-ROOM,p.z,Math.max(0f,-ROOM-near),envFriction,envRest);
+                    cp[0],cp[1],p.z,Math.max(0f,-ROOM-near),envFriction,envRest);
             contacts.add(c);
         }
         float far=p.y+ey;
         if(far>=ROOM-CONTACT_SLOP){
+            float[] cp=supportPoint(p,0f,1f);
             Contact c=environmentContact(p,0f,1f,0f,
-                    p.x,ROOM,p.z,Math.max(0f,far-ROOM),envFriction,envRest);
+                    cp[0],cp[1],p.z,Math.max(0f,far-ROOM),envFriction,envRest);
             contacts.add(c);
         }
     }
@@ -1042,12 +1046,13 @@ public final class PixelPhysicsVoxelView extends View {
         float k=ia+ib+ran*ran*iia+rbn*rbn*iib;
         if(k<1e-8f)return;
 
-        float e=(-vn)>RESTITUTION_VELOCITY_THRESHOLD?c.restitution:0f;
+        float impactSpeed=-vn;
+        float e=impactSpeed>RESTITUTION_VELOCITY_THRESHOLD?c.restitution:0f;
         float j=-(1f+e)*vn/k;
         applyImpulse(a,-j*c.nx,-j*c.ny,-j*c.nz,rax,ray);
         if(b!=null)applyImpulse(b,j*c.nx,j*c.ny,j*c.nz,rbx,rby);
 
-        if(j>0.015f){
+        if(j>0.015f && impactSpeed>0.25f){
             a.wake();
             if(b!=null)b.wake();
         }
@@ -1076,6 +1081,18 @@ public final class PixelPhysicsVoxelView extends View {
 
         applyImpulse(a,-jt*tx,-jt*ty,-jt*tz,rax,ray);
         if(b!=null)applyImpulse(b,jt*tx,jt*ty,jt*tz,rbx,rby);
+
+        // A single-point 2.5D floor contact otherwise has no torsional friction.
+        // Approximate the distributed contact patch with a bounded angular impulse.
+        if(b==null && Math.abs(c.nz)>0.5f && Math.abs(a.spin)>0.0001f){
+            float invI=a.invInertia();
+            if(invI>1e-8f){
+                float desired=-a.spin/invI;
+                float limit=c.friction*j*Math.max(0.01f,a.radius()*0.35f);
+                float angularImpulse=clamp(desired,-limit,limit);
+                a.spin+=angularImpulse*invI;
+            }
+        }
     }
 
     private void applyImpulse(Prop p,float ix,float iy,float iz,float rx,float ry) {
