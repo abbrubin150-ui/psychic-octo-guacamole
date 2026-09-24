@@ -3,6 +3,7 @@ package com.pixelphysics.sandbox;
 import com.badlogic.gdx.*;
 import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.graphics.g2d.*;
+import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.*;
 import com.badlogic.gdx.utils.*;
@@ -832,7 +833,7 @@ public class PixelPhysics25DGame extends ApplicationAdapter implements InputProc
         float len=(float)Math.sqrt(dx*dx+dy*dy);
         if(len<0.01f)return;
         float angle=MathUtils.atan2(dy,dx)*MathUtils.radiansToDegrees;
-        shapes.rect(a.x,a.y-width*0.5f,0,width,0,0,len,width,1f,1f,angle);
+        shapes.rect(a.x,a.y-width*0.5f,0f,width*0.5f,len,width,1f,1f,angle);
     }
 
     private void drawVerticalPost(float x,float y,float z0,float z1,float width,Color color) {
