@@ -587,6 +587,8 @@ public final class PixelPhysicsVoxelView extends View {
         nextId=Math.max(nextId,p.id+1);
         p.type=type;p.material=material;
         p.x=x;p.y=y;p.z=z;p.yaw=yaw;p.frozen=frozen;
+        p.sleeping=frozen;
+        p.syncShape();
         props.add(p);byId.put(p.id,p);
         return p;
     }
@@ -638,7 +640,10 @@ public final class PixelPhysicsVoxelView extends View {
             if(q!=null)setFrozen(q,prior,false);
         });
         p.frozen=frozen;
+        p.sleeping=frozen;
+        p.sleepTimer=0f;
         p.vx=p.vy=p.vz=p.spin=0f;
+        p.syncShape();
         feedback();saveWorld();
     }
 
@@ -666,107 +671,434 @@ public final class PixelPhysicsVoxelView extends View {
     }
 
     private void physicsStep(float dt) {
+        int substeps=computeSubsteps(dt);
+        float h=dt/substeps;
+
+        for(int sub=0;sub<substeps;sub++){
+            // External acceleration and semi-implicit integration.
+            for(int i=0;i<props.size();i++){
+                Prop p=props.get(i);
+                p.grounded=false;
+                if(p.frozen||p.sleeping)continue;
+
+                if(p!=grabbed)p.vz-=GRAVITY*h;
+
+                float linearDamp=1f/(1f+0.045f*h);
+                float angularDamp=1f/(1f+0.55f*h);
+                p.vx*=linearDamp;p.vy*=linearDamp;p.vz*=linearDamp;
+                p.spin*=angularDamp;
+
+                p.x+=p.vx*h;
+                p.y+=p.vy*h;
+                p.z+=p.vz*h;
+                p.yaw+=p.spin*h;
+                p.syncShape();
+            }
+
+            solveWorldBounds(h);
+            buildContacts();
+
+            for(int iter=0;iter<VELOCITY_ITERS;iter++){
+                for(int i=0;i<contacts.size();i++)solveContactVelocity(contacts.get(i));
+            }
+
+            for(int iter=0;iter<POSITION_ITERS;iter++){
+                for(int i=0;i<contacts.size();i++)solveContactPosition(contacts.get(i));
+                solveWorldPositions();
+            }
+
+            updateSleeping(h);
+        }
+    }
+
+    private int computeSubsteps(float dt) {
+        float maxTravel=0f;
+        for(int i=0;i<props.size();i++){
+            Prop p=props.get(i);
+            if(p.frozen||p.sleeping)continue;
+            float linear=(float)Math.sqrt(p.vx*p.vx+p.vy*p.vy+p.vz*p.vz);
+            float rotational=Math.abs(p.spin)*p.radius();
+            maxTravel=Math.max(maxTravel,(linear+rotational)*dt);
+        }
+        int steps=(int)Math.ceil(maxTravel/MAX_TRAVEL_PER_SUBSTEP);
+        return clampInt(steps,1,MAX_SUBSTEPS);
+    }
+
+    private void solveWorldBounds(float dt) {
         for(int i=0;i<props.size();i++){
             Prop p=props.get(i);
             if(p.frozen)continue;
 
-            if(p!=grabbed)p.vz-=GRAVITY*dt;
-            p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;
-            p.yaw+=p.spin*dt;p.spin*=0.992f;
+            p.syncShape();
+            float ex=PhysicsMath25D.aabbHalfX(p.shape);
+            float ey=PhysicsMath25D.aabbHalfY(p.shape);
+            float e=restitution(p.material);
+            float mu=friction(p.material);
 
-            float r=p.radius();
-            if(p.x-r<-ROOM){p.x=-ROOM+r;p.vx=Math.abs(p.vx)*restitution(p.material);}
-            if(p.x+r> ROOM){p.x= ROOM-r;p.vx=-Math.abs(p.vx)*restitution(p.material);}
-            if(p.y-r<-ROOM){p.y=-ROOM+r;p.vy=Math.abs(p.vy)*restitution(p.material);}
-            if(p.y+r> ROOM){p.y= ROOM-r;p.vy=-Math.abs(p.vy)*restitution(p.material);}
-
-            float support=supportHeight(p);
-            if(p.bottom()<support){
-                p.z=support+p.type.hMeters()*0.5f;
-                if(p.vz<0)p.vz=-p.vz*restitution(p.material);
-                if(Math.abs(p.vz)<0.24f)p.vz=0f;
-                float fr=friction(p.material);
-                p.vx*=Math.max(0f,1f-fr*dt*3f);
-                p.vy*=Math.max(0f,1f-fr*dt*3f);
+            if(p.x-ex<-ROOM){
+                float pen=-ROOM-(p.x-ex);
+                p.x+=pen;
+                if(p.vx<0f){
+                    float impact=-p.vx;
+                    p.vx=impact>RESTITUTION_THRESHOLD?impact*e:0f;
+                    applyWallFriction(p,mu,impact,true);
+                }
+                p.wake();
+            }
+            if(p.x+ex>ROOM){
+                float pen=(p.x+ex)-ROOM;
+                p.x-=pen;
+                if(p.vx>0f){
+                    float impact=p.vx;
+                    p.vx=impact>RESTITUTION_THRESHOLD?-impact*e:0f;
+                    applyWallFriction(p,mu,impact,true);
+                }
+                p.wake();
+            }
+            if(p.y-ey<-ROOM){
+                float pen=-ROOM-(p.y-ey);
+                p.y+=pen;
+                if(p.vy<0f){
+                    float impact=-p.vy;
+                    p.vy=impact>RESTITUTION_THRESHOLD?impact*e:0f;
+                    applyWallFriction(p,mu,impact,false);
+                }
+                p.wake();
+            }
+            if(p.y+ey>ROOM){
+                float pen=(p.y+ey)-ROOM;
+                p.y-=pen;
+                if(p.vy>0f){
+                    float impact=p.vy;
+                    p.vy=impact>RESTITUTION_THRESHOLD?-impact*e:0f;
+                    applyWallFriction(p,mu,impact,false);
+                }
+                p.wake();
             }
 
-            if(p.z<-1f){
-                p.x=0;p.y=0;p.z=0.55f;p.vx=p.vy=p.vz=0;
+            float bottom=p.bottom();
+            if(bottom<0f){
+                p.z-=bottom;
+                if(p.vz<0f){
+                    float impact=-p.vz;
+                    float bounce=impact>RESTITUTION_THRESHOLD?impact*e:0f;
+                    p.vz=bounce;
+                    applyGroundFriction(p,mu,impact*(1f+e));
+                }
+                if(Math.abs(p.vz)<0.035f)p.vz=0f;
+                p.grounded=true;
+            }else if(bottom<CONTACT_SLOP*2f&&p.vz<=0.04f){
+                p.grounded=true;
             }
+
+            p.syncShape();
         }
-
-        solveHorizontalCollisions();
     }
 
-    private float supportHeight(Prop p) {
-        float best=0f;
+    private void applyWallFriction(Prop p,float mu,float normalSpeed,boolean wallX) {
+        float maxDv=mu*normalSpeed;
+        if(wallX){
+            float tang=(float)Math.sqrt(p.vy*p.vy+p.vz*p.vz);
+            if(tang>1e-6f){
+                float dv=Math.min(tang,maxDv);
+                float s=(tang-dv)/tang;
+                p.vy*=s;p.vz*=s;
+            }
+        }else{
+            float tang=(float)Math.sqrt(p.vx*p.vx+p.vz*p.vz);
+            if(tang>1e-6f){
+                float dv=Math.min(tang,maxDv);
+                float s=(tang-dv)/tang;
+                p.vx*=s;p.vz*=s;
+            }
+        }
+        p.spin*=Math.max(0f,1f-mu*0.08f);
+    }
+
+    private void applyGroundFriction(Prop p,float mu,float normalDeltaV) {
+        float speed=(float)Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+        if(speed>1e-6f){
+            float dv=Math.min(speed,mu*normalDeltaV);
+            float s=(speed-dv)/speed;
+            p.vx*=s;p.vy*=s;
+        }
+        p.spin*=Math.max(0f,1f-mu*0.10f);
+    }
+
+    private void solveWorldPositions() {
         for(int i=0;i<props.size();i++){
-            Prop q=props.get(i);
-            if(q==p)continue;
-            float dx=p.x-q.x,dy=p.y-q.y;
-            float rr=(p.radius()+q.radius())*0.78f;
-            if(dx*dx+dy*dy>rr*rr)continue;
-            float top=q.top();
-            if(top<=p.z+0.05f&&top>best)best=top;
+            Prop p=props.get(i);
+            if(p.frozen)continue;
+            p.syncShape();
+
+            float ex=PhysicsMath25D.aabbHalfX(p.shape);
+            float ey=PhysicsMath25D.aabbHalfY(p.shape);
+
+            if(p.x-ex<-ROOM)p.x+=(-ROOM-(p.x-ex))*POSITION_PERCENT;
+            if(p.x+ex> ROOM)p.x-=((p.x+ex)-ROOM)*POSITION_PERCENT;
+            if(p.y-ey<-ROOM)p.y+=(-ROOM-(p.y-ey))*POSITION_PERCENT;
+            if(p.y+ey> ROOM)p.y-=((p.y+ey)-ROOM)*POSITION_PERCENT;
+
+            if(p.bottom()<0f)p.z+=(-p.bottom())*POSITION_PERCENT;
+            p.syncShape();
         }
-        return best;
     }
 
-    private void solveHorizontalCollisions() {
+    private void buildContacts() {
+        contacts.clear();
+        for(int i=0;i<props.size();i++)props.get(i).syncShape();
+
         for(int i=0;i<props.size();i++){
             Prop a=props.get(i);
             for(int j=i+1;j<props.size();j++){
                 Prop b=props.get(j);
                 if(a.frozen&&b.frozen)continue;
-                if(a.top()<b.bottom()+0.01f||b.top()<a.bottom()+0.01f)continue;
 
-                float dx=b.x-a.x,dy=b.y-a.y;
-                float min=(a.radius()+b.radius())*0.78f;
-                float d2=dx*dx+dy*dy;
-                if(d2>=min*min)continue;
+                // Cheap broadphase in XY.
+                float ax=PhysicsMath25D.aabbHalfX(a.shape);
+                float ay=PhysicsMath25D.aabbHalfY(a.shape);
+                float bx=PhysicsMath25D.aabbHalfX(b.shape);
+                float by=PhysicsMath25D.aabbHalfY(b.shape);
+                if(Math.abs(b.x-a.x)>ax+bx+0.002f)continue;
+                if(Math.abs(b.y-a.y)>ay+by+0.002f)continue;
 
-                float d=(float)Math.sqrt(Math.max(d2,0.000001f));
-                float nx=dx/d,ny=dy/d,penetration=min-d;
-                float wa=a.frozen?0f:1f,wb=b.frozen?0f:1f,sum=wa+wb;
-                if(sum<=0)continue;
+                if(!PhysicsMath25D.collide(a.shape,b.shape,manifoldScratch))continue;
 
-                if(!a.frozen){a.x-=nx*penetration*(wa/sum);a.y-=ny*penetration*(wa/sum);}
-                if(!b.frozen){b.x+=nx*penetration*(wb/sum);b.y+=ny*penetration*(wb/sum);}
+                float zPen;
+                Prop lower,upper;
+                if(a.z<=b.z){lower=a;upper=b;}
+                else{lower=b;upper=a;}
 
-                float rel=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
-                if(rel<0){
-                    float e=Math.min(restitution(a.material),restitution(b.material));
-                    float ia=a.frozen?0f:1f/a.type.mass,ib=b.frozen?0f:1f/b.type.mass;
-                    float impulse=-(1f+e)*rel/Math.max(0.0001f,ia+ib);
-                    if(!a.frozen){a.vx-=impulse*nx*ia;a.vy-=impulse*ny*ia;}
-                    if(!b.frozen){b.vx+=impulse*nx*ib;b.vy+=impulse*ny*ib;}
+                float support=surfaceHeightAt(lower,upper.x,upper.y);
+                zPen=support-upper.bottom();
+
+                boolean topContact=zPen>0f
+                        && upper.z>lower.z
+                        && upper.bottom()>lower.bottom()+lower.halfH()*0.35f
+                        && (zPen<=manifoldScratch.penetration*1.35f
+                            || Math.abs(upper.vz-lower.vz)>0.10f);
+
+                Contact ct=new Contact();
+                ct.a=a;ct.b=b;
+                ct.cx=manifoldScratch.cx;ct.cy=manifoldScratch.cy;
+
+                if(topContact){
+                    ct.vertical=true;
+                    ct.nx=ct.ny=0f;
+                    ct.nz=(a==lower)?1f:-1f;
+                    ct.penetration=zPen;
+                    upper.grounded=true;
+                }else{
+                    // Side contacts only exist while the Z intervals overlap.
+                    float overlapZ=Math.min(a.top(),b.top())-Math.max(a.bottom(),b.bottom());
+                    if(overlapZ<=0f)continue;
+                    ct.vertical=false;
+                    ct.nx=manifoldScratch.nx;
+                    ct.ny=manifoldScratch.ny;
+                    ct.nz=0f;
+                    ct.penetration=manifoldScratch.penetration;
                 }
+                contacts.add(ct);
+            }
+        }
+    }
+
+    private float surfaceHeightAt(Prop lower,float worldX,float worldY) {
+        if(lower.type!=PropType.STAIRS)return lower.top();
+
+        // The voxel staircase is 8 steps along its local +X axis.
+        float c=(float)Math.cos(lower.yaw),s=(float)Math.sin(lower.yaw);
+        float dx=worldX-lower.x,dy=worldY-lower.y;
+        float lx=dx*c+dy*s;
+        float ly=-dx*s+dy*c;
+
+        if(Math.abs(lx)>lower.halfW()+0.01f||Math.abs(ly)>lower.halfD()+0.01f)
+            return lower.top();
+
+        float u=clamp((lx+lower.halfW())/Math.max(0.0001f,lower.type.wMeters()),0f,0.9999f);
+        int step=clampInt((int)(u*8f),0,7);
+        float localTop=Math.min(lower.type.hMeters(),(step+1)*3f*VOXEL_METERS);
+        return lower.bottom()+localTop;
+    }
+
+    private void solveContactVelocity(Contact c) {
+        Prop a=c.a,b=c.b;
+        float invA=a.invMass(),invB=b.invMass();
+        if(invA+invB<=0f)return;
+
+        if(c.vertical){
+            float rv=(b.vz-a.vz)*c.nz;
+            if(rv>0f)return;
+
+            float impact=-rv;
+            float e=impact>RESTITUTION_THRESHOLD?Math.min(restitution(a.material),restitution(b.material)):0f;
+            float j=-(1f+e)*rv/(invA+invB);
+            if(j<=0f)return;
+
+            if(!a.frozen){a.vz-=j*c.nz*invA;a.wake();}
+            if(!b.frozen){b.vz+=j*c.nz*invB;b.wake();}
+
+            // Coulomb support friction, including yaw torque at the contact point.
+            float rax=c.cx-a.x,ray=c.cy-a.y;
+            float rbx=c.cx-b.x,rby=c.cy-b.y;
+            float avx=a.vx-a.spin*ray,avy=a.vy+a.spin*rax;
+            float bvx=b.vx-b.spin*rby,bvy=b.vy+b.spin*rbx;
+            float tx=bvx-avx,ty=bvy-avy;
+            float ts=(float)Math.sqrt(tx*tx+ty*ty);
+            if(ts>1e-6f){
+                tx/=ts;ty/=ts;
+                float raCross=rax*ty-ray*tx;
+                float rbCross=rbx*ty-rby*tx;
+                float denom=invA+invB+raCross*raCross*a.invInertia()+rbCross*rbCross*b.invInertia();
+                if(denom>1e-7f){
+                    float jt=-ts/denom;
+                    float mu=(float)Math.sqrt(friction(a.material)*friction(b.material));
+                    float maxF=mu*j;
+                    jt=clamp(jt,-maxF,maxF);
+                    applyXYImpulse(a,-jt*tx,-jt*ty,rax,ray);
+                    applyXYImpulse(b, jt*tx, jt*ty,rbx,rby);
+                }
+            }
+            if(c.nz>0f)b.grounded=true;else a.grounded=true;
+            return;
+        }
+
+        float rax=c.cx-a.x,ray=c.cy-a.y;
+        float rbx=c.cx-b.x,rby=c.cy-b.y;
+        float avx=a.vx-a.spin*ray,avy=a.vy+a.spin*rax;
+        float bvx=b.vx-b.spin*rby,bvy=b.vy+b.spin*rbx;
+        float rvx=bvx-avx,rvy=bvy-avy;
+        float vn=rvx*c.nx+rvy*c.ny;
+        if(vn>0f)return;
+
+        float raCross=rax*c.ny-ray*c.nx;
+        float rbCross=rbx*c.ny-rby*c.nx;
+        float denom=invA+invB+raCross*raCross*a.invInertia()+rbCross*rbCross*b.invInertia();
+        if(denom<=1e-7f)return;
+
+        float impact=-vn;
+        float e=impact>RESTITUTION_THRESHOLD?Math.min(restitution(a.material),restitution(b.material)):0f;
+        float j=-(1f+e)*vn/denom;
+        if(j<=0f)return;
+
+        applyXYImpulse(a,-j*c.nx,-j*c.ny,rax,ray);
+        applyXYImpulse(b, j*c.nx, j*c.ny,rbx,rby);
+
+        // Tangential impulse after the normal impulse.
+        avx=a.vx-a.spin*ray;avy=a.vy+a.spin*rax;
+        bvx=b.vx-b.spin*rby;bvy=b.vy+b.spin*rbx;
+        rvx=bvx-avx;rvy=bvy-avy;
+
+        float tx=-c.ny,ty=c.nx;
+        float vt=rvx*tx+rvy*ty;
+        float raT=rax*ty-ray*tx;
+        float rbT=rbx*ty-rby*tx;
+        float denomT=invA+invB+raT*raT*a.invInertia()+rbT*rbT*b.invInertia();
+        if(denomT>1e-7f){
+            float jt=-vt/denomT;
+            float mu=(float)Math.sqrt(friction(a.material)*friction(b.material));
+            float maxF=mu*j;
+            jt=clamp(jt,-maxF,maxF);
+            applyXYImpulse(a,-jt*tx,-jt*ty,rax,ray);
+            applyXYImpulse(b, jt*tx, jt*ty,rbx,rby);
+        }
+
+        if(j>0.015f){a.wake();b.wake();}
+    }
+
+    private void applyXYImpulse(Prop p,float ix,float iy,float rx,float ry) {
+        if(p.frozen)return;
+        float invM=p.invMass();
+        p.vx+=ix*invM;
+        p.vy+=iy*invM;
+        p.spin+=(rx*iy-ry*ix)*p.invInertia();
+        p.wake();
+    }
+
+    private void solveContactPosition(Contact c) {
+        Prop a=c.a,b=c.b;
+        float invA=a.invMass(),invB=b.invMass(),sum=invA+invB;
+        if(sum<=0f)return;
+
+        a.syncShape();b.syncShape();
+        if(!PhysicsMath25D.collide(a.shape,b.shape,manifoldScratch))return;
+
+        if(c.vertical){
+            Prop lower=a.z<=b.z?a:b;
+            Prop upper=lower==a?b:a;
+            float pen=surfaceHeightAt(lower,upper.x,upper.y)-upper.bottom();
+            if(pen<=CONTACT_SLOP)return;
+
+            float corr=(pen-CONTACT_SLOP)*POSITION_PERCENT/sum;
+            if(!lower.frozen)lower.z-=corr*lower.invMass();
+            if(!upper.frozen)upper.z+=corr*upper.invMass();
+            upper.grounded=true;
+        }else{
+            float pen=manifoldScratch.penetration;
+            if(pen<=CONTACT_SLOP)return;
+            float corr=(pen-CONTACT_SLOP)*POSITION_PERCENT/sum;
+            float nx=manifoldScratch.nx,ny=manifoldScratch.ny;
+            if(!a.frozen){a.x-=nx*corr*invA;a.y-=ny*corr*invA;}
+            if(!b.frozen){b.x+=nx*corr*invB;b.y+=ny*corr*invB;}
+        }
+        a.syncShape();b.syncShape();
+    }
+
+    private void updateSleeping(float dt) {
+        for(int i=0;i<props.size();i++){
+            Prop p=props.get(i);
+            if(p.frozen)continue;
+            if(p==grabbed){p.wake();continue;}
+
+            float linear2=p.vx*p.vx+p.vy*p.vy;
+            boolean quiet=linear2<SLEEP_LINEAR*SLEEP_LINEAR
+                    && Math.abs(p.vz)<SLEEP_VERTICAL
+                    && Math.abs(p.spin)<SLEEP_ANGULAR
+                    && p.grounded;
+
+            if(quiet){
+                p.sleepTimer+=dt;
+                if(p.sleepTimer>=SLEEP_DELAY){
+                    p.sleeping=true;
+                    p.vx=p.vy=p.vz=p.spin=0f;
+                }
+            }else{
+                p.sleepTimer=0f;
+                p.sleeping=false;
             }
         }
     }
 
     private float restitution(MaterialKind m) {
-        return m==MaterialKind.RUBBER?0.70f:(m==MaterialKind.METAL?0.10f:0.15f);
+        return m==MaterialKind.RUBBER?0.68f:(m==MaterialKind.METAL?0.08f:0.12f);
     }
 
     private float friction(MaterialKind m) {
-        return m==MaterialKind.RUBBER?0.88f:(m==MaterialKind.METAL?0.42f:0.68f);
+        return m==MaterialKind.RUBBER?0.92f:(m==MaterialKind.METAL?0.38f:0.66f);
     }
 
     private void updateGrab(float dt) {
         if(mode!=Mode.GRAB||grabbed==null||grabbed.frozen)return;
+        grabbed.wake();
+
         float mass=Math.max(0.25f,grabbed.type.mass);
-        float ms=(float)Math.pow(mass,0.34);
-        float kp=58f*ms,kd=9.5f*(float)Math.sqrt(ms);
-        float fx=(targetX-grabbed.x)*kp-grabbed.vx*kd;
-        float fy=(targetY-grabbed.y)*kp-grabbed.vy*kd;
-        float fz=(targetZ-grabbed.z)*kp-grabbed.vz*kd;
-        float cap=100f*(float)Math.pow(Math.max(1f,mass),0.58);
+        // Near-critical spring: high enough to feel direct, damped enough not to inject energy.
+        float stiffness=145f*(float)Math.pow(mass,0.24);
+        float damping=2f*(float)Math.sqrt(stiffness*mass)*0.92f;
+
+        float fx=(targetX-grabbed.x)*stiffness-grabbed.vx*damping;
+        float fy=(targetY-grabbed.y)*stiffness-grabbed.vy*damping;
+        float fz=(targetZ-grabbed.z)*stiffness-grabbed.vz*damping;
+
+        float cap=150f*(float)Math.pow(Math.max(1f,mass),0.58);
         float len=(float)Math.sqrt(fx*fx+fy*fy+fz*fz);
         if(len>cap){
             float s=cap/len;fx*=s;fy*=s;fz*=s;
         }
-        grabbed.vx+=fx/mass*dt;grabbed.vy+=fy/mass*dt;grabbed.vz+=fz/mass*dt;
+
+        grabbed.vx+=fx/mass*dt;
+        grabbed.vy+=fy/mass*dt;
+        grabbed.vz+=fz/mass*dt;
     }
 
     private PointF project(float xMeters,float yMeters,float zMeters) {
