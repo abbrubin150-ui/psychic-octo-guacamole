@@ -1,9 +1,8 @@
-name: Pixel Physics Isometric 2.5D Build
+name: Pixel Physics Native 2.5D Build
 on:
   push:
     branches:
-      - pixel-physics-25d-isometric
-  pull_request:
+      - pixel-physics-25d-native-android
   workflow_dispatch:
 
 jobs:
@@ -23,26 +22,21 @@ jobs:
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
-          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
-      - name: Build isometric 2.5D APK
+      - name: Build native Android APK
         run: gradle --stacktrace :app:assembleDebug
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-25D.apk
-      - name: Verify isometric 2.5D APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-Native25D.apk
+      - name: Verify APK has no game-engine native libraries
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-25D.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-25D.apk | head -40
-          unzip -t PixelPhysicsSandbox-25D.apk
-          unzip -l PixelPhysicsSandbox-25D.apk | grep -q "lib/arm64-v8a/libgdx.so"
-          unzip -l PixelPhysicsSandbox-25D.apk | grep -q "lib/x86_64/libgdx.so"
-          ! unzip -l PixelPhysicsSandbox-25D.apk | grep -q "libgdx-box2d.so"
-          ! unzip -l PixelPhysicsSandbox-25D.apk | grep -q "libgdx-bullet.so"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-Native25D.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-Native25D.apk | head -40
+          unzip -t PixelPhysicsSandbox-Native25D.apk
+          ! unzip -l PixelPhysicsSandbox-Native25D.apk | grep -qE "libgdx|libgdx-box2d|libgdx-bullet"
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-physics-25d-apk
-          path: PixelPhysicsSandbox-25D.apk
+          name: pixel-physics-native-25d-apk
+          path: PixelPhysicsSandbox-Native25D.apk
           if-no-files-found: error
-
 
   runtime-smoke:
     needs: build
@@ -51,9 +45,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: pixel-physics-25d-apk
+          name: pixel-physics-native-25d-apk
           path: .
-      - name: Android 16 launch + crash log
+      - name: Android 16 launch and process survival
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -63,16 +57,10 @@ jobs:
           disable-linux-hw-accel: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            adb install -r PixelPhysicsSandbox-25D.apk
+            adb install -r PixelPhysicsSandbox-Native25D.apk
             adb logcat -c
             adb shell am force-stop com.pixelphysics.sandbox
             adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
             sleep 15
-            echo "PID:"
-            adb shell pidof com.pixelphysics.sandbox || true
-            echo "CRASH BUFFER:"
-            adb logcat -d -b crash || true
-            echo "APP LOGS:"
-            adb logcat -d -v threadtime | grep -E "com.pixelphysics.sandbox|AndroidRuntime|FATAL EXCEPTION|libgdx|PixelPhysics" | tail -300 || true
-            adb shell pidof com.pixelphysics.sandbox >/dev/null
+            adb shell pidof com.pixelphysics.sandbox
             ! adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"
