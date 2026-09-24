@@ -85,6 +85,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     private boolean contextTriggered = false;
     private float contextX, contextY;
     private PhysicsObject contextObject;
+    private PhysicsObject pressObject;
 
     private final Vector3 tmp1 = new Vector3();
     private final Vector3 tmp2 = new Vector3();
@@ -404,7 +405,13 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     private void setFrozen(final PhysicsObject o, boolean frozen, boolean recordUndo) {
         if (o==null || o.frozen==frozen) return;
         final boolean prior=o.frozen;
-        if (recordUndo) pushUndo(() -> setFrozen(o,prior,false));
+        if (recordUndo) {
+            final int id=o.id;
+            pushUndo(() -> {
+                PhysicsObject target=byId.get(id);
+                if (target!=null) setFrozen(target,prior,false);
+            });
+        }
         o.frozen=frozen;
         o.body.setLinearVelocity(Vector3.Zero);
         o.body.setAngularVelocity(Vector3.Zero);
@@ -423,7 +430,11 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         if (o==null) return;
         final MaterialKind prior=o.material;
         MaterialKind next = prior==MaterialKind.MAHOGANY?MaterialKind.METAL:(prior==MaterialKind.METAL?MaterialKind.RUBBER:MaterialKind.MAHOGANY);
-        pushUndo(() -> applyMaterial(o,prior));
+        final int id=o.id;
+        pushUndo(() -> {
+            PhysicsObject target=byId.get(id);
+            if (target!=null) applyMaterial(target,prior);
+        });
         applyMaterial(o,next);
         feedbackClick();
         saveWorld();
@@ -534,14 +545,19 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     @Override
     public void render() {
         float delta=Math.min(Gdx.graphics.getDeltaTime(),0.05f);
-        if (mode==Mode.GRAB && !contextTriggered) {
-            float moved=Vector2.dst(downX,downY,px[Math.max(0,primaryPointer)],py[Math.max(0,primaryPointer)]);
+        if ((mode==Mode.GRAB || mode==Mode.CAMERA) && !contextTriggered && pressObject!=null && primaryPointer>=0) {
+            float moved=Vector2.dst(downX,downY,px[primaryPointer],py[primaryPointer]);
             if (moved<18f && (TimeUtils.nanoTime()-downNanos)>550_000_000L) {
                 contextTriggered=true;
-                contextObject=grabbed;
+                contextObject=pressObject;
                 contextX=downX;
                 contextY=downY;
-                endGrab();
+                if (mode==Mode.GRAB) {
+                    endGrab();
+                } else {
+                    primaryPointer=-1;
+                    secondPointer=-1;
+                }
                 mode=Mode.CONTEXT;
             }
         }
@@ -838,6 +854,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
             lastPrimaryY=screenY;
             downNanos=TimeUtils.nanoTime();
             RayHit hit=raycast(camera.getPickRay(screenX,screenY),50f);
+            pressObject=hit.object;
             if (hit.object!=null && !hit.object.frozen) {
                 startGrab(hit.object,hit.point,pointer);
             } else {
@@ -913,6 +930,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
             }
             if(pointer==primaryPointer) {
                 endGrab();
+                pressObject=null;
                 return true;
             }
         }
@@ -924,6 +942,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
             if(pointer==primaryPointer) {
                 primaryPointer=-1;
                 secondPointer=-1;
+                pressObject=null;
                 mode=Mode.IDLE;
                 return true;
             }
