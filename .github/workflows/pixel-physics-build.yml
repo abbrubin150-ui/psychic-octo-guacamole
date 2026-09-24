@@ -1,4 +1,4 @@
-name: Pixel Physics Android Build
+name: Pixel Physics 3D Android Build
 on:
   pull_request:
   workflow_dispatch:
@@ -24,30 +24,30 @@ jobs:
       - name: Build debug APK
         run: gradle --stacktrace :app:assembleDebug
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-MVP.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-3D.apk
       - name: Verify APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-MVP.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-MVP.apk | head -40
-          unzip -t PixelPhysicsSandbox-MVP.apk
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx.so"
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx-bullet.so"
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx.so"
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx-bullet.so"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-3D.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-3D.apk | head -40
+          unzip -t PixelPhysicsSandbox-3D.apk
+          unzip -l PixelPhysicsSandbox-3D.apk | grep -q "lib/arm64-v8a/libgdx.so"
+          unzip -l PixelPhysicsSandbox-3D.apk | grep -q "lib/arm64-v8a/libgdx-bullet.so"
+          unzip -l PixelPhysicsSandbox-3D.apk | grep -q "lib/x86_64/libgdx.so"
+          unzip -l PixelPhysicsSandbox-3D.apk | grep -q "lib/x86_64/libgdx-bullet.so"
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-physics-apk
-          path: PixelPhysicsSandbox-MVP.apk
+          name: pixel-physics-3d-apk
+          path: PixelPhysicsSandbox-3D.apk
           if-no-files-found: error
 
   runtime-smoke:
     needs: build
-    runs-on: macos-13
+    runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: pixel-physics-apk
+          name: pixel-physics-3d-apk
           path: .
       - name: Android 15 runtime smoke test
         uses: reactivecircus/android-emulator-runner@v2
@@ -56,9 +56,10 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
+          disable-linux-hw-accel: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            adb install -r PixelPhysicsSandbox-MVP.apk
+            adb install -r PixelPhysicsSandbox-3D.apk
             adb logcat -c
             adb shell am start -n com.pixelphysics.sandbox/.AndroidLauncher
             sleep 12
@@ -68,6 +69,6 @@ jobs:
             test -s pixel-physics-smoke.png
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-physics-smoke
+          name: pixel-physics-3d-smoke
           path: pixel-physics-smoke.png
           if-no-files-found: error
