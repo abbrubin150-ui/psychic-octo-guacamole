@@ -880,7 +880,7 @@ public final class PixelPhysicsVoxelView extends View {
                 if(a.z<=b.z){lower=a;upper=b;}
                 else{lower=b;upper=a;}
 
-                float support=surfaceHeightAt(lower,upper.x,upper.y);
+                float support=surfaceHeightAt(lower,upper);
                 zPen=support-upper.bottom();
 
                 // Extruded-prism minimum-translation-axis rule:
@@ -925,23 +925,40 @@ public final class PixelPhysicsVoxelView extends View {
         return c;
     }
 
-    private float surfaceHeightAt(Prop lower,float worldX,float worldY) {
+    private float surfaceHeightAt(Prop lower,Prop upper) {
         if(lower.type!=PropType.STAIRS)return lower.top();
 
-        // The voxel staircase is 8 steps along its local +X axis.
         float stairYaw=lower.collisionYaw();
         float c=(float)Math.cos(stairYaw),s=(float)Math.sin(stairYaw);
-        float dx=worldX-lower.x,dy=worldY-lower.y;
+
+        // Sample the upper footprint at center and four extreme support points in
+        // the staircase local axes. Because pitch/roll are intentionally absent,
+        // the highest valid step is the conservative support plane.
+        float best=Float.NEGATIVE_INFINITY;
+        best=Math.max(best,stairHeightAtPoint(lower,upper.x,upper.y,c,s));
+
+        upper.syncShape();
+        float[][] dirs={{c,s},{-c,-s},{-s,c},{s,-c}};
+        for(int i=0;i<dirs.length;i++){
+            PhysicsMath25D.supportPoint(upper.shape,dirs[i][0],dirs[i][1],supportScratch);
+            best=Math.max(best,stairHeightAtPoint(lower,supportScratch.x,supportScratch.y,c,s));
+        }
+
+        return best==Float.NEGATIVE_INFINITY?lower.top():best;
+    }
+
+    private float stairHeightAtPoint(Prop stair,float worldX,float worldY,float c,float s) {
+        float dx=worldX-stair.x,dy=worldY-stair.y;
         float lx=dx*c+dy*s;
         float ly=-dx*s+dy*c;
 
-        if(Math.abs(lx)>lower.halfW()+0.01f||Math.abs(ly)>lower.halfD()+0.01f)
-            return lower.top();
+        if(Math.abs(lx)>stair.halfW()+0.006f||Math.abs(ly)>stair.halfD()+0.006f)
+            return Float.NEGATIVE_INFINITY;
 
-        float u=clamp((lx+lower.halfW())/Math.max(0.0001f,lower.type.wMeters()),0f,0.9999f);
+        float u=clamp((lx+stair.halfW())/Math.max(0.0001f,stair.type.wMeters()),0f,0.9999f);
         int step=clampInt((int)(u*8f),0,7);
-        float localTop=Math.min(lower.type.hMeters(),(step+1)*3f*VOXEL_METERS);
-        return lower.bottom()+localTop;
+        float localTop=Math.min(stair.type.hMeters(),(step+1)*3f*VOXEL_METERS);
+        return stair.bottom()+localTop;
     }
 
     private void solveContactVelocity(Contact c) {
@@ -1049,7 +1066,7 @@ public final class PixelPhysicsVoxelView extends View {
         if(c.vertical){
             Prop lower=a.z<=b.z?a:b;
             Prop upper=lower==a?b:a;
-            float pen=surfaceHeightAt(lower,upper.x,upper.y)-upper.bottom();
+            float pen=surfaceHeightAt(lower,upper)-upper.bottom();
             if(pen<=CONTACT_SLOP)return;
 
             float corr=(pen-CONTACT_SLOP)*POSITION_PERCENT/sum;
