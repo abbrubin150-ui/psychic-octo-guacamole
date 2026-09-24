@@ -1,13 +1,13 @@
-name: Voxel Dynamics v8.1
+name: Pixel Physics Lab v8.1
 
 concurrency:
-  group: voxel-dynamics-v81-${{ github.ref }}
+  group: pixel-physics-lab-v81-${{ github.ref }}
   cancel-in-progress: true
 
 on:
   push:
     branches:
-      - pixel-physics-enterprise-v8
+      - pixel-physics-lab-v8-1
   pull_request:
   workflow_dispatch:
 
@@ -37,7 +37,7 @@ jobs:
           test -s app/src/main/assets/www/style.css
           test -s app/src/main/assets/www/game.js
           test -s app/src/main/assets/www/rapier_wasm3d_bg.wasm
-          grep -q "VOXEL DYNAMICS" app/src/main/assets/www/index.html
+          grep -q "PIXEL PHYSICS LAB" app/src/main/assets/www/index.html
           grep -q 'type="module"' app/src/main/assets/www/index.html
           grep -q "rapier_wasm3d_bg.wasm" app/src/main/assets/www/game.js
 
@@ -59,25 +59,25 @@ jobs:
       - name: Run Android unit tests
         run: gradle --stacktrace :app:testDebugUnitTest
 
-      - name: Build Voxel Dynamics APK
+      - name: Build Pixel Physics Lab APK
         run: gradle --stacktrace :app:assembleDebug
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk VoxelDynamics-v8.1.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsLab-v8.1.apk
 
       - name: Verify signed self-contained APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs VoxelDynamics-v8.1.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging VoxelDynamics-v8.1.apk | head -40
-          unzip -t VoxelDynamics-v8.1.apk
-          unzip -l VoxelDynamics-v8.1.apk | grep -q "assets/www/game.js"
-          unzip -l VoxelDynamics-v8.1.apk | grep -q "assets/www/index.html"
-          unzip -l VoxelDynamics-v8.1.apk | grep -q "assets/www/rapier_wasm3d_bg.wasm"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsLab-v8.1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsLab-v8.1.apk | head -40
+          unzip -t PixelPhysicsLab-v8.1.apk
+          unzip -l PixelPhysicsLab-v8.1.apk | grep -q "assets/www/game.js"
+          unzip -l PixelPhysicsLab-v8.1.apk | grep -q "assets/www/index.html"
+          unzip -l PixelPhysicsLab-v8.1.apk | grep -q "assets/www/rapier_wasm3d_bg.wasm"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: voxel-dynamics-v81-apk
-          path: VoxelDynamics-v8.1.apk
+          name: pixel-physics-lab-v81-apk
+          path: PixelPhysicsLab-v8.1.apk
           if-no-files-found: error
 
   runtime-smoke:
@@ -89,7 +89,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: voxel-dynamics-v81-apk
+          name: pixel-physics-lab-v81-apk
           path: .
 
       - name: Android 16 APP_READY and interaction soak
@@ -100,13 +100,13 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: bash scripts/android-smoke-v8.sh VoxelDynamics-v8.1.apk
+          script: bash scripts/android-smoke-v8.sh PixelPhysicsLab-v8.1.apk
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: voxel-dynamics-v81-smoke
+          name: pixel-physics-lab-v81-smoke
           path: |
-            voxel-dynamics-v81-smoke.png
-            voxel-dynamics-v81-metrics.txt
+            pixel-physics-lab-v81-smoke.png
+            pixel-physics-lab-v81-metrics.txt
           if-no-files-found: ignore
