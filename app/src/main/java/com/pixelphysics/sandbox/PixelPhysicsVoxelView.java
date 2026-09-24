@@ -785,7 +785,9 @@ public final class PixelPhysicsVoxelView extends View {
 
     private void addEnvironmentContacts(Prop p) {
         float envFriction=(float)Math.sqrt(friction(p.material)*0.72f);
-        float envRest=(float)Math.sqrt(restitution(p.material)*0.05f);
+        // The workshop floor/walls are treated as effectively rigid; the body's
+        // restitution dominates the pair coefficient.
+        float envRest=restitution(p.material);
 
         float bottom=p.bottom();
         if(bottom<=CONTACT_SLOP){
