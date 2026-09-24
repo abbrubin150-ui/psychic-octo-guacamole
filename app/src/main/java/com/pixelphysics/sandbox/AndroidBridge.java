@@ -89,7 +89,7 @@ public final class AndroidBridge {
     public String buildInfo() {
         try {
             JSONObject o = new JSONObject();
-            o.put("version", "0.8.0-enterprise-v8");
+            o.put("version", "0.8.1-voxel-dynamics");
             o.put("sdk", Build.VERSION.SDK_INT);
             o.put("device", Build.DEVICE);
             o.put("model", Build.MODEL);
