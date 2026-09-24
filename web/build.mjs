@@ -10,7 +10,7 @@ await build({
   bundle: true,
   minify: true,
   sourcemap: true,
-  format: "iife",
+  format: "esm",
   platform: "browser",
   target: ["chrome120"],
   define: {
