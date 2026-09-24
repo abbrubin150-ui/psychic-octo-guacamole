@@ -23,7 +23,7 @@ import androidx.annotation.Nullable;
 import androidx.webkit.WebViewAssetLoader;
 
 public class AndroidLauncher extends Activity {
-    private static final String TAG = "VoxelDynamics";
+    private static final String TAG = "PixelPhysicsLab";
     private static final String APP_ORIGIN = "https://appassets.androidplatform.net";
     private WebView webView;
 
@@ -120,13 +120,13 @@ public class AndroidLauncher extends Activity {
                     WebView view,
                     RenderProcessGoneDetail detail) {
                 Log.e(TAG, "WEBVIEW_RENDERER_GONE crash=" + detail.didCrash());
-                showNativeFatal("Renderer process stopped. Reopen Voxel Dynamics.");
+                showNativeFatal("Renderer process stopped. Reopen Pixel Physics Lab.");
                 return true;
             }
         });
 
         setContentView(webView);
-        Log.i(TAG, "HOST_START Voxel Dynamics 0.8.1");
+        Log.i(TAG, "HOST_START Pixel Physics Lab 0.8.1");
         webView.loadUrl(APP_ORIGIN + "/assets/www/index.html");
     }
 
