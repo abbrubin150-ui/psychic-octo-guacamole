@@ -1,0 +1,36 @@
+plugins { id 'com.android.application' }
+
+def gdxVersion = '1.13.1'
+
+android {
+    namespace 'com.pixelphysics.sandbox'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.pixelphysics.sandbox'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0-mvp'
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    packaging {
+        jniLibs { useLegacyPackaging = true }
+        resources { excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*'] }
+    }
+}
+
+dependencies {
+    implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-bullet:$gdxVersion"
+    runtimeOnly "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a"
+    runtimeOnly "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"
+    runtimeOnly "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64"
+    runtimeOnly "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-arm64-v8a"
+    runtimeOnly "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-armeabi-v7a"
+    runtimeOnly "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-x86_64"
+}
