@@ -24,20 +24,20 @@ jobs:
       - name: Build debug APK
         run: gradle --stacktrace :app:assembleDebug
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-MVP.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-2D-Pixel.apk
       - name: Verify APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-MVP.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-MVP.apk | head -40
-          unzip -t PixelPhysicsSandbox-MVP.apk
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx.so"
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx-bullet.so"
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx.so"
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx-bullet.so"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-2D-Pixel.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-2D-Pixel.apk | head -40
+          unzip -t PixelPhysicsSandbox-2D-Pixel.apk
+          unzip -l PixelPhysicsSandbox-2D-Pixel.apk | grep -q "lib/arm64-v8a/libgdx.so"
+          unzip -l PixelPhysicsSandbox-2D-Pixel.apk | grep -q "lib/arm64-v8a/libgdx-box2d.so"
+          unzip -l PixelPhysicsSandbox-2D-Pixel.apk | grep -q "lib/x86_64/libgdx.so"
+          unzip -l PixelPhysicsSandbox-2D-Pixel.apk | grep -q "lib/x86_64/libgdx-box2d.so"
       - uses: actions/upload-artifact@v4
         with:
           name: pixel-physics-apk
-          path: PixelPhysicsSandbox-MVP.apk
+          path: PixelPhysicsSandbox-2D-Pixel.apk
           if-no-files-found: error
 
   runtime-smoke:
@@ -59,7 +59,7 @@ jobs:
           disable-linux-hw-accel: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            adb install -r PixelPhysicsSandbox-MVP.apk
+            adb install -r PixelPhysicsSandbox-2D-Pixel.apk
             adb logcat -c
             adb shell am start -n com.pixelphysics.sandbox/.AndroidLauncher
             sleep 12
