@@ -21,3 +21,7 @@ await build({
 
 await copyFile("src/index.html", outDir + "/index.html");
 await copyFile("src/style.css", outDir + "/style.css");
+await copyFile(
+  "node_modules/@dimforge/rapier3d-compat/rapier_wasm3d_bg.wasm",
+  outDir + "/rapier_wasm3d_bg.wasm"
+);
