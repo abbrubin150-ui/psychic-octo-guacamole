@@ -64,6 +64,18 @@ public final class PixelPhysicsVoxelView extends View {
     private static final float GRAVITY = 9.81f;
     private static final int MAX_PROPS = 100;
 
+    // Physics v7: sequential impulses + adaptive substeps.
+    private static final int VELOCITY_ITERATIONS = 10;
+    private static final int POSITION_ITERATIONS = 4;
+    private static final int MAX_SUBSTEPS = 6;
+    private static final float CONTACT_SLOP = 0.0015f;
+    private static final float POSITION_BETA = 0.62f;
+    private static final float RESTITUTION_VELOCITY_THRESHOLD = 0.85f;
+    private static final float SLEEP_LINEAR = 0.035f;
+    private static final float SLEEP_VERTICAL = 0.045f;
+    private static final float SLEEP_ANGULAR = 0.08f;
+    private static final float SLEEP_TIME = 0.70f;
+
     private final Paint paint = new Paint();
     private final Paint pixelPaint = new Paint();
     private final Bitmap logicalBitmap = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888);
@@ -81,6 +93,7 @@ public final class PixelPhysicsVoxelView extends View {
     private final ArrayList<Prop> drawOrder = new ArrayList<>();
     private final HashMap<Integer, Prop> byId = new HashMap<>();
     private final ArrayDeque<UndoAction> undo = new ArrayDeque<>();
+    private final ArrayList<Contact> contacts = new ArrayList<>();
 
     private final HashMap<PropType, VoxelModel> models = new HashMap<>();
     private final HashMap<String, Bitmap[]> voxelSpriteCache = new HashMap<>();
@@ -111,11 +124,13 @@ public final class PixelPhysicsVoxelView extends View {
     private float contextX;
     private float contextY;
 
-    private float grabOffsetX;
-    private float grabOffsetY;
+    private float grabLocalX;
+    private float grabLocalY;
+    private float grabLocalZ;
     private float targetX;
     private float targetY;
     private float targetZ;
+    private float targetYaw;
     private float lastTwoDistance;
     private float lastTwoAngle;
 
@@ -214,12 +229,39 @@ public final class PixelPhysicsVoxelView extends View {
         float yaw;
         float spin;
         boolean frozen;
+        boolean sleeping;
+        float sleepTimer;
 
         float radius() {
             return Math.max(type.wMeters(), type.dMeters()) * 0.5f;
         }
+        float halfW() { return type.wMeters()*0.5f; }
+        float halfD() { return type.dMeters()*0.5f; }
         float bottom() { return z-type.hMeters()*0.5f; }
         float top() { return z+type.hMeters()*0.5f; }
+        boolean circleFootprint() {
+            return type.renderKind==RenderKind.BALL || type==PropType.BARREL;
+        }
+        float invMass() {
+            return frozen ? 0f : 1f/Math.max(0.001f,type.mass);
+        }
+        float inertia() {
+            float m=Math.max(0.001f,type.mass);
+            if(circleFootprint()) {
+                float r=Math.max(type.wMeters(),type.dMeters())*0.5f;
+                return 0.5f*m*r*r;
+            }
+            float w=type.wMeters(),d=type.dMeters();
+            return m*(w*w+d*d)/12f;
+        }
+        float invInertia() {
+            return frozen ? 0f : 1f/Math.max(0.00001f,inertia());
+        }
+        void wake() {
+            if(frozen)return;
+            sleeping=false;
+            sleepTimer=0f;
+        }
 
         SaveState snapshot() {
             SaveState s=new SaveState();
@@ -234,6 +276,22 @@ public final class PixelPhysicsVoxelView extends View {
         String type,material;
         float x,y,z,yaw;
         boolean frozen;
+    }
+
+    private static final class Contact {
+        Prop a;
+        Prop b;
+        float nx,ny,nz;
+        float px,py,pz;
+        float penetration;
+        float friction;
+        float restitution;
+    }
+
+    private static final class Hit2 {
+        boolean hit;
+        float nx,ny,penetration;
+        float px,py;
     }
 
     private interface UndoAction { void undo(); }
