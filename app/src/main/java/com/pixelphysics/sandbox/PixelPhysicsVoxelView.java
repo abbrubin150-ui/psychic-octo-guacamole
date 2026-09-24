@@ -663,107 +663,540 @@ public final class PixelPhysicsVoxelView extends View {
     }
 
     private void physicsStep(float dt) {
+        int substeps=adaptiveSubsteps(dt);
+        float h=dt/substeps;
+
+        for(int step=0;step<substeps;step++){
+            integrateForces(h);
+            integratePositions(h);
+
+            // Positional constraint pass. Contacts are regenerated because the
+            // previous correction changes the manifold for stacked bodies.
+            for(int iter=0;iter<POSITION_ITERATIONS;iter++){
+                collectContacts();
+                if(contacts.isEmpty())break;
+                for(int i=0;i<contacts.size();i++)solvePosition(contacts.get(i));
+            }
+
+            collectContacts();
+            for(int iter=0;iter<VELOCITY_ITERATIONS;iter++){
+                for(int i=0;i<contacts.size();i++)solveVelocity(contacts.get(i));
+            }
+        }
+
+        updateSleeping(dt);
+
         for(int i=0;i<props.size();i++){
             Prop p=props.get(i);
-            if(p.frozen)continue;
-
-            if(p!=grabbed)p.vz-=GRAVITY*dt;
-            p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;
-            p.yaw+=p.spin*dt;p.spin*=0.992f;
-
-            float r=p.radius();
-            if(p.x-r<-ROOM){p.x=-ROOM+r;p.vx=Math.abs(p.vx)*restitution(p.material);}
-            if(p.x+r> ROOM){p.x= ROOM-r;p.vx=-Math.abs(p.vx)*restitution(p.material);}
-            if(p.y-r<-ROOM){p.y=-ROOM+r;p.vy=Math.abs(p.vy)*restitution(p.material);}
-            if(p.y+r> ROOM){p.y= ROOM-r;p.vy=-Math.abs(p.vy)*restitution(p.material);}
-
-            float support=supportHeight(p);
-            if(p.bottom()<support){
-                p.z=support+p.type.hMeters()*0.5f;
-                if(p.vz<0)p.vz=-p.vz*restitution(p.material);
-                if(Math.abs(p.vz)<0.24f)p.vz=0f;
-                float fr=friction(p.material);
-                p.vx*=Math.max(0f,1f-fr*dt*3f);
-                p.vy*=Math.max(0f,1f-fr*dt*3f);
-            }
-
             if(p.z<-1f){
-                p.x=0;p.y=0;p.z=0.55f;p.vx=p.vy=p.vz=0;
+                p.x=0f;p.y=0f;p.z=0.55f;
+                p.vx=p.vy=p.vz=p.spin=0f;
+                p.wake();
             }
         }
-
-        solveHorizontalCollisions();
     }
 
-    private float supportHeight(Prop p) {
-        float best=0f;
+    private int adaptiveSubsteps(float dt) {
+        float worst=0f;
+        float smallest=Float.POSITIVE_INFINITY;
         for(int i=0;i<props.size();i++){
-            Prop q=props.get(i);
-            if(q==p)continue;
-            float dx=p.x-q.x,dy=p.y-q.y;
-            float rr=(p.radius()+q.radius())*0.78f;
-            if(dx*dx+dy*dy>rr*rr)continue;
-            float top=q.top();
-            if(top<=p.z+0.05f&&top>best)best=top;
+            Prop p=props.get(i);
+            if(p.frozen||p.sleeping)continue;
+            float speed=(float)Math.sqrt(p.vx*p.vx+p.vy*p.vy+p.vz*p.vz);
+            worst=Math.max(worst,speed);
+            float feature=Math.min(p.type.wMeters(),Math.min(p.type.dMeters(),p.type.hMeters()));
+            smallest=Math.min(smallest,Math.max(0.025f,feature));
         }
-        return best;
+        if(smallest==Float.POSITIVE_INFINITY)return 1;
+        float travel=worst*dt;
+        int n=(int)Math.ceil(travel/Math.max(0.008f,smallest*0.35f));
+        return clampInt(n,1,MAX_SUBSTEPS);
     }
 
-    private void solveHorizontalCollisions() {
+    private void integrateForces(float dt) {
+        for(int i=0;i<props.size();i++){
+            Prop p=props.get(i);
+            if(p.frozen||p.sleeping)continue;
+            if(p!=grabbed)p.vz-=GRAVITY*dt;
+
+            // Air drag is deliberately weak; contact friction does the real work.
+            float linearDrag=(float)Math.exp(-0.08f*dt);
+            float angularDrag=(float)Math.exp(-0.22f*dt);
+            p.vx*=linearDrag;p.vy*=linearDrag;p.vz*=linearDrag;
+            p.spin*=angularDrag;
+        }
+    }
+
+    private void integratePositions(float dt) {
+        for(int i=0;i<props.size();i++){
+            Prop p=props.get(i);
+            if(p.frozen||p.sleeping)continue;
+            p.x+=p.vx*dt;
+            p.y+=p.vy*dt;
+            p.z+=p.vz*dt;
+            p.yaw=wrapAngle(p.yaw+p.spin*dt);
+        }
+    }
+
+    private void collectContacts() {
+        contacts.clear();
+
+        for(int i=0;i<props.size();i++){
+            Prop p=props.get(i);
+            addEnvironmentContacts(p);
+        }
+
         for(int i=0;i<props.size();i++){
             Prop a=props.get(i);
             for(int j=i+1;j<props.size();j++){
                 Prop b=props.get(j);
                 if(a.frozen&&b.frozen)continue;
-                if(a.top()<b.bottom()+0.01f||b.top()<a.bottom()+0.01f)continue;
+                addPairContact(a,b);
+            }
+        }
+    }
 
-                float dx=b.x-a.x,dy=b.y-a.y;
-                float min=(a.radius()+b.radius())*0.78f;
-                float d2=dx*dx+dy*dy;
-                if(d2>=min*min)continue;
+    private void addEnvironmentContacts(Prop p) {
+        float envFriction=(float)Math.sqrt(friction(p.material)*0.72f);
+        float envRest=(float)Math.sqrt(restitution(p.material)*0.05f);
 
-                float d=(float)Math.sqrt(Math.max(d2,0.000001f));
-                float nx=dx/d,ny=dy/d,penetration=min-d;
-                float wa=a.frozen?0f:1f,wb=b.frozen?0f:1f,sum=wa+wb;
-                if(sum<=0)continue;
+        float bottom=p.bottom();
+        if(bottom<=CONTACT_SLOP){
+            Contact c=new Contact();
+            c.a=p;c.b=null;
+            c.nx=0;c.ny=0;c.nz=-1f; // normal from body toward floor
+            c.px=p.x;c.py=p.y;c.pz=0f;
+            c.penetration=Math.max(0f,-bottom);
+            c.friction=envFriction;c.restitution=envRest;
+            contacts.add(c);
+        }
 
-                if(!a.frozen){a.x-=nx*penetration*(wa/sum);a.y-=ny*penetration*(wa/sum);}
-                if(!b.frozen){b.x+=nx*penetration*(wb/sum);b.y+=ny*penetration*(wb/sum);}
+        float ex=footprintExtent(p,1f,0f);
+        float ey=footprintExtent(p,0f,1f);
 
-                float rel=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
-                if(rel<0){
-                    float e=Math.min(restitution(a.material),restitution(b.material));
-                    float ia=a.frozen?0f:1f/a.type.mass,ib=b.frozen?0f:1f/b.type.mass;
-                    float impulse=-(1f+e)*rel/Math.max(0.0001f,ia+ib);
-                    if(!a.frozen){a.vx-=impulse*nx*ia;a.vy-=impulse*ny*ia;}
-                    if(!b.frozen){b.vx+=impulse*nx*ib;b.vy+=impulse*ny*ib;}
+        float left=p.x-ex;
+        if(left<=-ROOM+CONTACT_SLOP){
+            Contact c=environmentContact(p,-1f,0f,0f,
+                    -ROOM,p.y,p.z,Math.max(0f,-ROOM-left),envFriction,envRest);
+            contacts.add(c);
+        }
+        float right=p.x+ex;
+        if(right>=ROOM-CONTACT_SLOP){
+            Contact c=environmentContact(p,1f,0f,0f,
+                    ROOM,p.y,p.z,Math.max(0f,right-ROOM),envFriction,envRest);
+            contacts.add(c);
+        }
+        float near=p.y-ey;
+        if(near<=-ROOM+CONTACT_SLOP){
+            Contact c=environmentContact(p,0f,-1f,0f,
+                    p.x,-ROOM,p.z,Math.max(0f,-ROOM-near),envFriction,envRest);
+            contacts.add(c);
+        }
+        float far=p.y+ey;
+        if(far>=ROOM-CONTACT_SLOP){
+            Contact c=environmentContact(p,0f,1f,0f,
+                    p.x,ROOM,p.z,Math.max(0f,far-ROOM),envFriction,envRest);
+            contacts.add(c);
+        }
+    }
+
+    private Contact environmentContact(Prop p,float nx,float ny,float nz,
+                                       float px,float py,float pz,float penetration,
+                                       float friction,float restitution) {
+        Contact c=new Contact();
+        c.a=p;c.b=null;c.nx=nx;c.ny=ny;c.nz=nz;
+        c.px=px;c.py=py;c.pz=pz;c.penetration=penetration;
+        c.friction=friction;c.restitution=restitution;
+        return c;
+    }
+
+    private void addPairContact(Prop a,Prop b) {
+        Hit2 h=horizontalHit(a,b);
+        if(!h.hit)return;
+
+        // Stair treads are a height-field on top of one rigid footprint rather
+        // than a fake flat lid. This keeps the visual staircase physically usable.
+        Contact stair=stairContact(a,b,h);
+        if(stair!=null){
+            contacts.add(stair);
+            return;
+        }
+
+        float zGap;
+        float zPen=Math.min(a.top(),b.top())-Math.max(a.bottom(),b.bottom());
+        if(zPen<-CONTACT_SLOP)return;
+
+        boolean verticalAxis=zPen<=h.penetration+CONTACT_SLOP;
+        Contact c=new Contact();
+        c.a=a;c.b=b;
+        c.friction=(float)Math.sqrt(friction(a.material)*friction(b.material));
+        c.restitution=(float)Math.sqrt(restitution(a.material)*restitution(b.material));
+
+        if(verticalAxis){
+            boolean bAbove=b.z>=a.z;
+            c.nx=0f;c.ny=0f;c.nz=bAbove?1f:-1f;
+            c.px=(a.x+b.x)*0.5f;
+            c.py=(a.y+b.y)*0.5f;
+            c.pz=bAbove?Math.min(a.top(),b.bottom()):Math.max(a.bottom(),b.top());
+            c.penetration=Math.max(0f,zPen);
+        }else{
+            c.nx=h.nx;c.ny=h.ny;c.nz=0f;
+            c.px=h.px;c.py=h.py;
+            c.pz=(Math.max(a.bottom(),b.bottom())+Math.min(a.top(),b.top()))*0.5f;
+            c.penetration=Math.max(0f,h.penetration);
+        }
+        contacts.add(c);
+    }
+
+    private Contact stairContact(Prop a,Prop b,Hit2 h) {
+        if(a.type==PropType.STAIRS && b.z>=a.z){
+            float top=stairTopAt(a,b.x,b.y,b.radius()*0.20f);
+            if(!Float.isNaN(top) && b.bottom()<=top+CONTACT_SLOP && b.bottom()>=a.bottom()-0.02f){
+                Contact c=new Contact();
+                c.a=a;c.b=b;c.nx=0;c.ny=0;c.nz=1f;
+                c.px=b.x;c.py=b.y;c.pz=top;
+                c.penetration=Math.max(0f,top-b.bottom());
+                c.friction=(float)Math.sqrt(friction(a.material)*friction(b.material));
+                c.restitution=(float)Math.sqrt(restitution(a.material)*restitution(b.material));
+                return c;
+            }
+        }
+        if(b.type==PropType.STAIRS && a.z>=b.z){
+            float top=stairTopAt(b,a.x,a.y,a.radius()*0.20f);
+            if(!Float.isNaN(top) && a.bottom()<=top+CONTACT_SLOP && a.bottom()>=b.bottom()-0.02f){
+                Contact c=new Contact();
+                c.a=a;c.b=b;c.nx=0;c.ny=0;c.nz=-1f;
+                c.px=a.x;c.py=a.y;c.pz=top;
+                c.penetration=Math.max(0f,top-a.bottom());
+                c.friction=(float)Math.sqrt(friction(a.material)*friction(b.material));
+                c.restitution=(float)Math.sqrt(restitution(a.material)*restitution(b.material));
+                return c;
+            }
+        }
+        return null;
+    }
+
+    private float stairTopAt(Prop stairs,float wx,float wy,float margin) {
+        float dx=wx-stairs.x,dy=wy-stairs.y;
+        float cs=(float)Math.cos(stairs.yaw),sn=(float)Math.sin(stairs.yaw);
+        float lx= cs*dx+sn*dy;
+        float ly=-sn*dx+cs*dy;
+        float hx=stairs.halfW(),hy=stairs.halfD();
+        if(lx<-hx-margin||lx>hx+margin||ly<-hy-margin||ly>hy+margin)return Float.NaN;
+        int steps=8;
+        float u=clamp((lx+hx)/(2f*hx),0f,0.9999f);
+        int index=clampInt((int)(u*steps),0,steps-1);
+        return stairs.bottom()+stairs.type.hMeters()*(index+1)/(float)steps;
+    }
+
+    private Hit2 horizontalHit(Prop a,Prop b) {
+        if(a.circleFootprint() && b.circleFootprint())return circleCircle(a,b);
+        if(a.circleFootprint() && !b.circleFootprint())return circleBox(a,b);
+        if(!a.circleFootprint() && b.circleFootprint()){
+            Hit2 h=circleBox(b,a);
+            if(h.hit){h.nx=-h.nx;h.ny=-h.ny;}
+            return h;
+        }
+        return boxBox(a,b);
+    }
+
+    private Hit2 circleCircle(Prop a,Prop b) {
+        Hit2 h=new Hit2();
+        float dx=b.x-a.x,dy=b.y-a.y;
+        float r=a.radius()+b.radius();
+        float d2=dx*dx+dy*dy;
+        if(d2>=r*r)return h;
+        float d=(float)Math.sqrt(Math.max(d2,1e-10f));
+        h.hit=true;
+        if(d<0.00001f){h.nx=1f;h.ny=0f;}
+        else{h.nx=dx/d;h.ny=dy/d;}
+        h.penetration=r-d;
+        h.px=a.x+h.nx*(a.radius()-h.penetration*0.5f);
+        h.py=a.y+h.ny*(a.radius()-h.penetration*0.5f);
+        return h;
+    }
+
+    private Hit2 circleBox(Prop circle,Prop box) {
+        Hit2 h=new Hit2();
+        float dx=circle.x-box.x,dy=circle.y-box.y;
+        float cs=(float)Math.cos(box.yaw),sn=(float)Math.sin(box.yaw);
+        float lx= cs*dx+sn*dy;
+        float ly=-sn*dx+cs*dy;
+        float hx=box.halfW(),hy=box.halfD();
+        float qx=clamp(lx,-hx,hx);
+        float qy=clamp(ly,-hy,hy);
+        float ex=qx-lx,ey=qy-ly;
+        float d2=ex*ex+ey*ey;
+        float r=circle.radius();
+
+        float nlx,nly,penetration;
+        if(d2>1e-10f){
+            float d=(float)Math.sqrt(d2);
+            if(d>=r)return h;
+            nlx=ex/d;nly=ey/d; // circle -> box
+            penetration=r-d;
+        }else{
+            float toX=hx-Math.abs(lx);
+            float toY=hy-Math.abs(ly);
+            if(toX<toY){
+                float outward=lx>=0?1f:-1f;
+                nlx=-outward;nly=0f;
+                penetration=r+toX;
+                qx=outward*hx;qy=ly;
+            }else{
+                float outward=ly>=0?1f:-1f;
+                nlx=0f;nly=-outward;
+                penetration=r+toY;
+                qx=lx;qy=outward*hy;
+            }
+        }
+
+        h.hit=true;
+        h.nx=cs*nlx-sn*nly;
+        h.ny=sn*nlx+cs*nly;
+        h.penetration=penetration;
+        h.px=box.x+cs*qx-sn*qy;
+        h.py=box.y+sn*qx+cs*qy;
+        return h;
+    }
+
+    private Hit2 boxBox(Prop a,Prop b) {
+        Hit2 h=new Hit2();
+        float ca=(float)Math.cos(a.yaw),sa=(float)Math.sin(a.yaw);
+        float cb=(float)Math.cos(b.yaw),sb=(float)Math.sin(b.yaw);
+        float[][] axes={{ca,sa},{-sa,ca},{cb,sb},{-sb,cb}};
+        float dx=b.x-a.x,dy=b.y-a.y;
+        float best=Float.POSITIVE_INFINITY,bnx=0,bny=0;
+
+        for(int i=0;i<4;i++){
+            float ax=axes[i][0],ay=axes[i][1];
+            float ra=footprintExtent(a,ax,ay);
+            float rb=footprintExtent(b,ax,ay);
+            float dist=dx*ax+dy*ay;
+            float overlap=ra+rb-Math.abs(dist);
+            if(overlap<=0f)return h;
+            if(overlap<best){
+                best=overlap;
+                float sign=dist>=0?1f:-1f;
+                bnx=ax*sign;bny=ay*sign;
+            }
+        }
+
+        float[] saPoint=supportPoint(a,bnx,bny);
+        float[] sbPoint=supportPoint(b,-bnx,-bny);
+        h.hit=true;h.nx=bnx;h.ny=bny;h.penetration=best;
+        h.px=(saPoint[0]+sbPoint[0])*0.5f;
+        h.py=(saPoint[1]+sbPoint[1])*0.5f;
+        return h;
+    }
+
+    private float footprintExtent(Prop p,float ax,float ay) {
+        if(p.circleFootprint())return p.radius();
+        float cs=(float)Math.cos(p.yaw),sn=(float)Math.sin(p.yaw);
+        float ux=cs,uy=sn;
+        float vx=-sn,vy=cs;
+        return p.halfW()*Math.abs(ux*ax+uy*ay)+p.halfD()*Math.abs(vx*ax+vy*ay);
+    }
+
+    private float[] supportPoint(Prop p,float dx,float dy) {
+        if(p.circleFootprint()){
+            float len=(float)Math.sqrt(Math.max(dx*dx+dy*dy,1e-10f));
+            return new float[]{p.x+dx/len*p.radius(),p.y+dy/len*p.radius()};
+        }
+        float cs=(float)Math.cos(p.yaw),sn=(float)Math.sin(p.yaw);
+        float ux=cs,uy=sn,vx=-sn,vy=cs;
+        float su=(ux*dx+uy*dy)>=0?1f:-1f;
+        float sv=(vx*dx+vy*dy)>=0?1f:-1f;
+        return new float[]{
+                p.x+ux*p.halfW()*su+vx*p.halfD()*sv,
+                p.y+uy*p.halfW()*su+vy*p.halfD()*sv
+        };
+    }
+
+    private void solveVelocity(Contact c) {
+        Prop a=c.a,b=c.b;
+        float ia=a.invMass(),ib=b==null?0f:b.invMass();
+        float iia=a.invInertia(),iib=b==null?0f:b.invInertia();
+
+        float rax=c.px-a.x,ray=c.py-a.y;
+        float rbx=b==null?0f:c.px-b.x,rby=b==null?0f:c.py-b.y;
+
+        float vax=a.vx-a.spin*ray;
+        float vay=a.vy+a.spin*rax;
+        float vaz=a.vz;
+        float vbx=b==null?0f:b.vx-b.spin*rby;
+        float vby=b==null?0f:b.vy+b.spin*rbx;
+        float vbz=b==null?0f:b.vz;
+
+        float rvx=vbx-vax,rvy=vby-vay,rvz=vbz-vaz;
+        float vn=rvx*c.nx+rvy*c.ny+rvz*c.nz;
+        if(vn>=0f)return;
+
+        float ran=rax*c.ny-ray*c.nx;
+        float rbn=rbx*c.ny-rby*c.nx;
+        float k=ia+ib+ran*ran*iia+rbn*rbn*iib;
+        if(k<1e-8f)return;
+
+        float e=(-vn)>RESTITUTION_VELOCITY_THRESHOLD?c.restitution:0f;
+        float j=-(1f+e)*vn/k;
+        applyImpulse(a,-j*c.nx,-j*c.ny,-j*c.nz,rax,ray);
+        if(b!=null)applyImpulse(b,j*c.nx,j*c.ny,j*c.nz,rbx,rby);
+
+        if(j>0.015f){
+            a.wake();
+            if(b!=null)b.wake();
+        }
+
+        // Recompute relative velocity after the normal impulse.
+        vax=a.vx-a.spin*ray;vay=a.vy+a.spin*rax;vaz=a.vz;
+        vbx=b==null?0f:b.vx-b.spin*rby;
+        vby=b==null?0f:b.vy+b.spin*rbx;
+        vbz=b==null?0f:b.vz;
+        rvx=vbx-vax;rvy=vby-vay;rvz=vbz-vaz;
+
+        float vtX=rvx-c.nx*(rvx*c.nx+rvy*c.ny+rvz*c.nz);
+        float vtY=rvy-c.ny*(rvx*c.nx+rvy*c.ny+rvz*c.nz);
+        float vtZ=rvz-c.nz*(rvx*c.nx+rvy*c.ny+rvz*c.nz);
+        float vtLen=(float)Math.sqrt(vtX*vtX+vtY*vtY+vtZ*vtZ);
+        if(vtLen<1e-6f)return;
+        float tx=vtX/vtLen,ty=vtY/vtLen,tz=vtZ/vtLen;
+
+        float rat=rax*ty-ray*tx;
+        float rbt=rbx*ty-rby*tx;
+        float kt=ia+ib+rat*rat*iia+rbt*rbt*iib;
+        if(kt<1e-8f)return;
+        float jt=-(rvx*tx+rvy*ty+rvz*tz)/kt;
+        float maxF=c.friction*j;
+        jt=clamp(jt,-maxF,maxF);
+
+        applyImpulse(a,-jt*tx,-jt*ty,-jt*tz,rax,ray);
+        if(b!=null)applyImpulse(b,jt*tx,jt*ty,jt*tz,rbx,rby);
+    }
+
+    private void applyImpulse(Prop p,float ix,float iy,float iz,float rx,float ry) {
+        if(p==null||p.frozen)return;
+        p.vx+=ix*p.invMass();
+        p.vy+=iy*p.invMass();
+        p.vz+=iz*p.invMass();
+        p.spin+=(rx*iy-ry*ix)*p.invInertia();
+    }
+
+    private void solvePosition(Contact c) {
+        float penetration=Math.max(0f,c.penetration-CONTACT_SLOP);
+        if(penetration<=0f)return;
+        Prop a=c.a,b=c.b;
+        float ia=a.invMass(),ib=b==null?0f:b.invMass();
+        float sum=ia+ib;
+        if(sum<=1e-8f)return;
+        float correction=POSITION_BETA*penetration/sum;
+
+        if(!a.frozen){
+            a.x-=c.nx*correction*ia;
+            a.y-=c.ny*correction*ia;
+            a.z-=c.nz*correction*ia;
+        }
+        if(b!=null&&!b.frozen){
+            b.x+=c.nx*correction*ib;
+            b.y+=c.ny*correction*ib;
+            b.z+=c.nz*correction*ib;
+        }
+    }
+
+    private boolean supported(Prop p) {
+        if(p.bottom()<=CONTACT_SLOP*2f)return true;
+        for(int i=0;i<props.size();i++){
+            Prop q=props.get(i);
+            if(q==p)continue;
+            Hit2 h=horizontalHit(p,q);
+            if(!h.hit)continue;
+            float top=q.type==PropType.STAIRS?stairTopAt(q,p.x,p.y,p.radius()*0.15f):q.top();
+            if(Float.isNaN(top))continue;
+            if(Math.abs(p.bottom()-top)<=CONTACT_SLOP*4f)return true;
+        }
+        return false;
+    }
+
+    private void updateSleeping(float dt) {
+        for(int i=0;i<props.size();i++){
+            Prop p=props.get(i);
+            if(p.frozen||p==grabbed){
+                p.sleepTimer=0f;
+                if(p==grabbed)p.sleeping=false;
+                continue;
+            }
+
+            float horizontal=p.vx*p.vx+p.vy*p.vy;
+            boolean slow=horizontal<SLEEP_LINEAR*SLEEP_LINEAR
+                    && Math.abs(p.vz)<SLEEP_VERTICAL
+                    && Math.abs(p.spin)<SLEEP_ANGULAR
+                    && supported(p);
+
+            if(slow){
+                p.sleepTimer+=dt;
+                if(p.sleepTimer>=SLEEP_TIME){
+                    p.sleeping=true;
+                    p.vx=p.vy=p.vz=p.spin=0f;
                 }
+            }else{
+                p.sleepTimer=0f;
+                p.sleeping=false;
             }
         }
     }
 
     private float restitution(MaterialKind m) {
-        return m==MaterialKind.RUBBER?0.70f:(m==MaterialKind.METAL?0.10f:0.15f);
+        return m==MaterialKind.RUBBER?0.72f:(m==MaterialKind.METAL?0.08f:0.14f);
     }
 
     private float friction(MaterialKind m) {
-        return m==MaterialKind.RUBBER?0.88f:(m==MaterialKind.METAL?0.42f:0.68f);
+        return m==MaterialKind.RUBBER?0.96f:(m==MaterialKind.METAL?0.36f:0.64f);
     }
 
     private void updateGrab(float dt) {
         if(mode!=Mode.GRAB||grabbed==null||grabbed.frozen)return;
+        grabbed.wake();
+
+        float cs=(float)Math.cos(grabbed.yaw),sn=(float)Math.sin(grabbed.yaw);
+        float rx=cs*grabLocalX-sn*grabLocalY;
+        float ry=sn*grabLocalX+cs*grabLocalY;
+        float rz=grabLocalZ;
+
+        float grabX=grabbed.x+rx;
+        float grabY=grabbed.y+ry;
+        float grabZ=grabbed.z+rz;
+
+        float pointVx=grabbed.vx-grabbed.spin*ry;
+        float pointVy=grabbed.vy+grabbed.spin*rx;
+        float pointVz=grabbed.vz;
+
         float mass=Math.max(0.25f,grabbed.type.mass);
-        float ms=(float)Math.pow(mass,0.34);
-        float kp=58f*ms,kd=9.5f*(float)Math.sqrt(ms);
-        float fx=(targetX-grabbed.x)*kp-grabbed.vx*kd;
-        float fy=(targetY-grabbed.y)*kp-grabbed.vy*kd;
-        float fz=(targetZ-grabbed.z)*kp-grabbed.vz*kd;
-        float cap=100f*(float)Math.pow(Math.max(1f,mass),0.58);
+        float ms=(float)Math.pow(mass,0.34f);
+        float kp=64f*ms;
+        float kd=2f*(float)Math.sqrt(kp*mass)*0.82f;
+
+        float fx=(targetX-grabX)*kp-pointVx*kd;
+        float fy=(targetY-grabY)*kp-pointVy*kd;
+        float fz=(targetZ-grabZ)*kp-pointVz*kd;
+        float cap=120f*(float)Math.pow(Math.max(1f,mass),0.58f);
         float len=(float)Math.sqrt(fx*fx+fy*fy+fz*fz);
         if(len>cap){
             float s=cap/len;fx*=s;fy*=s;fz*=s;
         }
-        grabbed.vx+=fx/mass*dt;grabbed.vy+=fy/mass*dt;grabbed.vz+=fz/mass*dt;
+
+        grabbed.vx+=fx*grabbed.invMass()*dt;
+        grabbed.vy+=fy*grabbed.invMass()*dt;
+        grabbed.vz+=fz*grabbed.invMass()*dt;
+
+        float torque=rx*fy-ry*fx;
+
+        // The gesture controls an angular spring, not the angle directly.
+        float angleError=wrapAngle(targetYaw-grabbed.yaw);
+        float inertia=grabbed.inertia();
+        float angularAccel=42f*angleError-11f*grabbed.spin;
+        torque+=inertia*angularAccel;
+        float maxTorque=Math.max(0.02f,inertia*85f);
+        torque=clamp(torque,-maxTorque,maxTorque);
+        grabbed.spin+=torque*grabbed.invInertia()*dt;
     }
 
     private PointF project(float xMeters,float yMeters,float zMeters) {
