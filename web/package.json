@@ -1,5 +1,5 @@
 {
-  "name": "voxel-dynamics",
+  "name": "pixel-physics-lab",
   "private": true,
   "version": "0.8.1",
   "type": "module",
@@ -8,7 +8,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@dimforge/rapier3d-compat": "0.18.0",
+    "@dimforge/rapier3d-compat": "0.18.2",
     "three": "0.180.0"
   },
   "devDependencies": {
