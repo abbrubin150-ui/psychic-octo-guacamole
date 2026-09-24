@@ -2,9 +2,12 @@ plugins { id 'com.android.application' }
 
 def gdxVersion = '1.13.1'
 
+configurations { natives }
+
 android {
     namespace 'com.pixelphysics.sandbox'
     compileSdk 35
+
     defaultConfig {
         applicationId 'com.pixelphysics.sandbox'
         minSdk 26
@@ -13,10 +16,12 @@ android {
         versionName '0.1.0-mvp'
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
     packaging {
         jniLibs { useLegacyPackaging = true }
         resources { excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*'] }
@@ -27,10 +32,36 @@ dependencies {
     implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-bullet:$gdxVersion"
-    runtimeOnly "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a"
-    runtimeOnly "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"
-    runtimeOnly "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64"
-    runtimeOnly "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-arm64-v8a"
-    runtimeOnly "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-armeabi-v7a"
-    runtimeOnly "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-x86_64"
+
+    natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a"
+    natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"
+    natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64"
+    natives "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-arm64-v8a"
+    natives "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-armeabi-v7a"
+    natives "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-x86_64"
 }
+
+tasks.register('copyAndroidNatives') {
+    doFirst {
+        file('src/main/jniLibs/arm64-v8a').mkdirs()
+        file('src/main/jniLibs/armeabi-v7a').mkdirs()
+        file('src/main/jniLibs/x86_64').mkdirs()
+    }
+    doLast {
+        configurations.natives.files.each { jar ->
+            def out = null
+            if (jar.name.endsWith('natives-arm64-v8a.jar')) out = file('src/main/jniLibs/arm64-v8a')
+            else if (jar.name.endsWith('natives-armeabi-v7a.jar')) out = file('src/main/jniLibs/armeabi-v7a')
+            else if (jar.name.endsWith('natives-x86_64.jar')) out = file('src/main/jniLibs/x86_64')
+            if (out != null) {
+                copy {
+                    from zipTree(jar)
+                    include '*.so'
+                    into out
+                }
+            }
+        }
+    }
+}
+
+tasks.named('preBuild').configure { dependsOn tasks.named('copyAndroidNatives') }
