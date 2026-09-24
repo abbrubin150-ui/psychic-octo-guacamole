@@ -1,51 +1,53 @@
-# Pixel Physics Sandbox — Pure 2D Pixel Edition
+# Pixel Physics Sandbox — Isometric 2.5D Pixel Edition
 
-A direct-touch physics sandbox rebuilt as a **pure 2D pixel-art game**.
+A physics sandbox rendered as **true 2D pixel art in an isometric 2.5D room**.
 
-## Visual invariant
+## Rendering model
 
-There is no 3D renderer, no mesh pipeline, no perspective camera, and no Bullet physics.
+This build deliberately does **not** use a 3D renderer, meshes, a perspective camera, or Bullet.
 
-The game renders to a fixed 480×270 canvas and scales with nearest-neighbor integer scaling.
+The simulation is a 2D Box2D floor plane plus an independent height channel:
 
-Every prop is represented by **four separately authored pixel sprites**:
+`(x, y)` = floor physics  
+`z` = vertical height, gravity and bounce  
+`screen = isometric(x, y) + vertical(z)`
 
-- 0°
-- 90°
-- 180°
-- 270°
+The game renders to a fixed **480×320** pixel canvas and scales with nearest-neighbor sampling.
 
-The renderer never rotates a sprite image. Box2D may simulate continuous rotation, but the visual representation selects the nearest authored directional frame.
+## Art model
 
-The Spawn Drawer uses the same four-frame sprite sets and cycles through them as a visible verification that each icon has multiple authored directions.
+Every spawnable prop has four separately authored isometric pixel frames:
+
+- NE
+- SE
+- SW
+- NW
+
+The renderer selects the nearest authored frame from the physical angle. It does not rotate a bitmap.
+
+The workshop itself is drawn as an isometric pixel-art room: diamond floor, two rear walls, timber frame, shelves, window, hanging spring/weight, rails and fixtures.
+
+## Interaction
+
+- one finger: grab and move on the isometric floor plane
+- two-finger pinch while grabbed: raise/lower the prop on the height channel
+- two-finger twist: physical torque
+- release: height gravity and natural Box2D momentum continue
+- long press: Freeze / Delete / Duplicate / Material
+- Spawn and Undo
+- autosave
 
 ## Physics
 
-- Box2D 2D rigid bodies
-- direct touch grab at the actual contact point
-- spring-damper force coupling
-- partial mass compensation
-- natural release/throw
-- two-finger torque
-- freeze/unfreeze
-- delete / duplicate
-- discrete undo
-- autosave
-
-## Pixel assets
-
-The MVP contains four-direction sprite sets for:
-
-Cube, Beam Short, Beam Long, Plank, Wood Ball, Metal Ball, Weight, Wheel, Rubber Ball, Barrel, Crate, and Ramp.
-
-Each material has a restricted hand-authored palette: mahogany, metal, and rubber.
+- Box2D handles floor-plane rigid-body collision and momentum
+- custom vertical gravity handles the 2.5D height channel
+- material-dependent vertical bounce
+- spring-damper direct-touch manipulation
+- fixed 60 Hz simulation
 
 ## Android
 
-Package: `com.pixelphysics.sandbox`
-
-Version: `0.2.0-pure-2d-pixel`
-
-Minimum Android: API 26
-
+Package: `com.pixelphysics.sandbox`  
+Version: `0.3.0-isometric-25d`  
+Minimum Android: API 26  
 Target SDK: API 35
