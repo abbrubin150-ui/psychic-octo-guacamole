@@ -29,37 +29,28 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-MVP.apk
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-MVP.apk | head -40
           unzip -t PixelPhysicsSandbox-MVP.apk
-      - name: Install Android 15 emulator image
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
-          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n pixelphysics -k "system-images;android-35;google_apis;x86_64" --force
-      - name: Emulator smoke test
-        run: |
-          ADB="$ANDROID_HOME/platform-tools/adb"
-          test -x "$ADB"
-          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm || true; fi
-          nohup "$ANDROID_HOME/emulator/emulator" -avd pixelphysics -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect >/tmp/emulator.log 2>&1 &
-          "$ADB" wait-for-device
-          for i in $(seq 1 90); do
-            BOOT="$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
-            [ "$BOOT" = "1" ] && break
-            sleep 3
-          done
-          test "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = "1"
-          "$ADB" install -r PixelPhysicsSandbox-MVP.apk
-          "$ADB" logcat -c
-          "$ADB" shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
-          sleep 8
-          PID="$("$ADB" shell pidof com.pixelphysics.sandbox | tr -d '\r')"
-          test -n "$PID"
-          if "$ADB" logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
-            "$ADB" logcat -d -b crash
-            exit 1
-          fi
-          "$ADB" exec-out screencap -p > pixel-physics-smoke.png
-          test -s pixel-physics-smoke.png
-          echo "Smoke test process PID: $PID"
+      - name: Android 15 runtime smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r PixelPhysicsSandbox-MVP.apk
+            adb logcat -c
+            adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
+            sleep 8
+            PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
+            test -n "$PID"
+            if adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
+              adb logcat -d -b crash
+              exit 1
+            fi
+            adb exec-out screencap -p > pixel-physics-smoke.png
+            test -s pixel-physics-smoke.png
+            echo "Smoke test process PID: $PID"
       - uses: actions/upload-artifact@v4
         with:
           name: pixel-physics-apk
