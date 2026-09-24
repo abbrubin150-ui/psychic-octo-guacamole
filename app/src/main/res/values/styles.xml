@@ -1,0 +1,9 @@
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:colorAccent">#D88452</item>
+        <item name="android:navigationBarColor">#111014</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>
