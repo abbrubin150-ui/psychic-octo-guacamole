@@ -15,13 +15,13 @@ function bootMessage(message) {
 
 function bootReady() {
   if (bootEl) bootEl.hidden = true;
-  globalThis.__PIXEL_PHYSICS_READY__ = true;
-  globalThis.AndroidBridge?.log?.("info", "APP_READY Pixel Physics Lab 0.8.1");
+  globalThis.__VOXEL_DYNAMICS_READY__ = true;
+  globalThis.AndroidBridge?.log?.("info", "APP_READY Voxel Dynamics 0.8.1");
 }
 
 function bootFatal(error) {
   const message = String(error?.stack || error?.message || error || "Unknown startup failure");
-  globalThis.__PIXEL_PHYSICS_READY__ = false;
+  globalThis.__VOXEL_DYNAMICS_READY__ = false;
   globalThis.AndroidBridge?.log?.("error", "BOOT_FATAL " + message);
   if (!bootEl) return;
   bootEl.hidden = false;
@@ -142,7 +142,7 @@ let fps = 0;
 rig.update(0);
 pipeline.render();
 bootReady();
-globalThis.__voxelBootReady?.();\nrequestAnimationFrame(frame);
+requestAnimationFrame(frame);
 
 function frame(now) {
   requestAnimationFrame(frame);
@@ -490,7 +490,7 @@ function captureState() {
   }
   return {
     schema: SAVE_SCHEMA,
-    version: "0.8.1-enterprise-v8-hotfix",
+    version: "0.8.1-voxel-dynamics",
     savedAt: Date.now(),
     camera: rig.snapshot(),
     objects
