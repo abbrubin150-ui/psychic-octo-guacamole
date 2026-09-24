@@ -1,50 +1,82 @@
-# Pixel Physics Sandbox — Pure 2D Pixel Edition
+# Pixel Physics Sandbox — Voxel Orthographic v6
 
-A direct-touch physics sandbox rebuilt as a **pure 2D pixel-art game**.
+This branch rebuilds the visual pipeline around **true voxel art under a fixed orthographic 45° camera**.
 
-## Visual invariant
+## Core raster invariant
 
-There is no 3D renderer, no mesh pipeline, no perspective camera, and no Bullet physics.
+- Simulation units are meters.
+- **0.01 m = 1 voxel unit = 1 viewport pixel unit.**
+- The camera is orthographic at 45°.
+- The 45° loss factor is compensated by **sqrt(2)** in the Y/Z projection terms.
+- After compensation and integer snap, the renderer uses the exact raster basis:
 
-The game renders to a fixed 480×270 canvas and scales with nearest-neighbor integer scaling.
+```
+pixelX = X - Y
+pixelY = (X + Y) / 2 - Z
+```
 
-Every prop is represented by **four separately authored pixel sprites**:
+where X/Y/Z are voxel coordinates.
 
-- 0°
-- 90°
-- 180°
-- 270°
+Every exposed voxel top/front face is emitted as a single viewport pixel. There is no texture filtering and no pseudo-pixel post effect.
 
-The renderer never rotates a sprite image. Box2D may simulate continuous rotation, but the visual representation selects the nearest authored directional frame.
+## Asset model
 
-The Spawn Drawer uses the same four-frame sprite sets and cycles through them as a visible verification that each icon has multiple authored directions.
+Voxel assets are stored as one 3D voxel model, not four hand-painted sprites.
 
-## Physics
+At runtime the same model is rotated into the four cardinal orientations and rasterized through the compensated orthographic projection. This means a staircase, crate, beam, wheel, barrel, spring, etc. remain visually coherent when rotated.
 
-- Box2D 2D rigid bodies
-- direct touch grab at the actual contact point
-- spring-damper force coupling
-- partial mass compensation
-- natural release/throw
-- two-finger torque
-- freeze/unfreeze
-- delete / duplicate
-- discrete undo
+Current voxel models:
+
+- Cube
+- Beam Short
+- Beam Long
+- Plank
+- Weight
+- Wheel
+- Barrel
+- Crate
+- Staircase
+- Spring
+
+The three balls are intentionally **non-voxel hybrid objects**, matching the reference technique where smooth/non-voxel elements can be mixed into the voxel scene.
+
+## Rendering implementation
+
+The renderer is implemented in pure Android Canvas/Java. It uses:
+
+- fixed 480×270 logical canvas
+- integer nearest-neighbor presentation scaling
+- software orthographic projection
+- per-face single-pixel emission
+- a tiny per-sprite depth buffer
+- deterministic material shading
+- cardinal model rotation from one voxel dataset
+
+No Bullet, Box2D, libGDX, OpenGL engine, JNI, or native `.so` libraries are required.
+
+## Physics / interaction
+
+The v5 custom XYZ physics remains:
+
+- gravity on Z
+- floor/object support
+- stacking
+- horizontal collisions
+- material friction/restitution
+- direct grab via spring-damper coupling
+- two-finger height control
+- twist rotation, snapped to the nearest cardinal direction on release
+- freeze / delete / duplicate / material cycle
+- undo
 - autosave
-
-## Pixel assets
-
-The MVP contains four-direction sprite sets for:
-
-Cube, Beam Short, Beam Long, Plank, Wood Ball, Metal Ball, Weight, Wheel, Rubber Ball, Barrel, Crate, and Ramp.
-
-Each material has a restricted hand-authored palette: mahogany, metal, and rubber.
 
 ## Android
 
 Package: `com.pixelphysics.sandbox`
 
-Version: `0.2.0-pure-2d-pixel`
+Version: `0.5.0-voxel-ortho`
+
+Version code: `6`
 
 Minimum Android: API 26
 
