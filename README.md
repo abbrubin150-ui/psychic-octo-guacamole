@@ -22,3 +22,5 @@ GitHub Actions builds and verifies `PixelPhysicsSandbox-MVP.apk` from the `pixel
 Package: `com.pixelphysics.sandbox`
 Minimum Android: API 26
 Target/compile SDK: API 35
+
+CI additionally installs the APK on an Android 15 x86_64 emulator, launches the main activity, checks that the app process remains alive, checks the crash buffer, and captures a smoke-test screenshot.
