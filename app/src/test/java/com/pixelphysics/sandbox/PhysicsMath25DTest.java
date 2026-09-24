@@ -2,6 +2,7 @@ package com.pixelphysics.sandbox;
 
 import static org.junit.Assert.*;
 import org.junit.Test;
+import java.util.Random;
 
 public class PhysicsMath25DTest {
     private static final float E = 1e-4f;
@@ -74,4 +75,34 @@ public class PhysicsMath25DTest {
         assertTrue(PhysicsMath25D.pointInside(box,0.08f,0.08f,0f));
         assertFalse(PhysicsMath25D.pointInside(box,0.14f,-0.14f,0f));
     }
+    @Test
+    public void randomizedObbSymmetryIsStable() {
+        Random rng=new Random(42025L);
+        for(int i=0;i<300;i++){
+            PhysicsMath25D.Shape a=new PhysicsMath25D.Shape().setBox(
+                    rng.nextFloat()*0.3f-0.15f,
+                    rng.nextFloat()*0.3f-0.15f,
+                    rng.nextFloat()*(float)Math.PI,
+                    0.02f+rng.nextFloat()*0.14f,
+                    0.02f+rng.nextFloat()*0.10f);
+            PhysicsMath25D.Shape b=new PhysicsMath25D.Shape().setBox(
+                    rng.nextFloat()*0.3f-0.15f,
+                    rng.nextFloat()*0.3f-0.15f,
+                    rng.nextFloat()*(float)Math.PI,
+                    0.02f+rng.nextFloat()*0.14f,
+                    0.02f+rng.nextFloat()*0.10f);
+
+            PhysicsMath25D.Manifold ab=new PhysicsMath25D.Manifold();
+            PhysicsMath25D.Manifold ba=new PhysicsMath25D.Manifold();
+            boolean hitAB=PhysicsMath25D.collide(a,b,ab);
+            boolean hitBA=PhysicsMath25D.collide(b,a,ba);
+            assertEquals(hitAB,hitBA);
+            if(hitAB){
+                assertEquals(ab.penetration,ba.penetration,3e-4f);
+                assertEquals(-ab.nx,ba.nx,3e-3f);
+                assertEquals(-ab.ny,ba.ny,3e-3f);
+            }
+        }
+    }
+
 }
