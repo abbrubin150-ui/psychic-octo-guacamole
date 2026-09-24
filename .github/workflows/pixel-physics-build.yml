@@ -1,9 +1,9 @@
-name: Pixel Physics Voxel Ortho v6
+name: Pixel Physics Physics v7
 
 on:
   push:
     branches:
-      - pixel-physics-voxel-ortho-v6
+      - pixel-physics-physics-v7
   pull_request:
   workflow_dispatch:
 
@@ -25,20 +25,22 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
-      - name: Build voxel ortho APK
+      - name: Run deterministic physics tests
+        run: gradle --stacktrace :app:testDebugUnitTest
+      - name: Build Physics v7 APK
         run: gradle --stacktrace :app:assembleDebug
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-VoxelOrtho-v6.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-Physics-v7.apk
       - name: Verify APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-VoxelOrtho-v6.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-VoxelOrtho-v6.apk | head -40
-          unzip -t PixelPhysicsSandbox-VoxelOrtho-v6.apk
-          ! unzip -l PixelPhysicsSandbox-VoxelOrtho-v6.apk | grep -E -q "lib/.*\.so$"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-Physics-v7.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-Physics-v7.apk | head -40
+          unzip -t PixelPhysicsSandbox-Physics-v7.apk
+          ! unzip -l PixelPhysicsSandbox-Physics-v7.apk | grep -E -q "lib/.*\.so$"
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-physics-voxel-ortho-v6-apk
-          path: PixelPhysicsSandbox-VoxelOrtho-v6.apk
+          name: pixel-physics-physics-v7-apk
+          path: PixelPhysicsSandbox-Physics-v7.apk
           if-no-files-found: error
 
   runtime-smoke:
@@ -48,9 +50,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: pixel-physics-voxel-ortho-v6-apk
+          name: pixel-physics-physics-v7-apk
           path: .
-      - name: Android 16 launch and crash check
+      - name: Android 16 physics soak
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -59,27 +61,30 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            adb install -r PixelPhysicsSandbox-VoxelOrtho-v6.apk
+            adb install -r PixelPhysicsSandbox-Physics-v7.apk
             adb logcat -c
             adb shell am force-stop com.pixelphysics.sandbox
             adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
-            sleep 12
+            sleep 10
+            adb shell input swipe 900 520 1120 430 800 || true
+            adb shell input swipe 1040 520 1240 590 800 || true
+            sleep 20
             PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
             echo "PID=$PID"
             if [ -z "$PID" ]; then
               adb logcat -d -b crash || true
-              adb logcat -d -v threadtime | tail -500 || true
+              adb logcat -d -v threadtime | tail -600 || true
               exit 1
             fi
             if adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
               adb logcat -d -b crash
               exit 1
             fi
-            adb exec-out screencap -p > voxel-ortho-v6-smoke.png
-            test -s voxel-ortho-v6-smoke.png
+            adb exec-out screencap -p > physics-v7-smoke.png
+            test -s physics-v7-smoke.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pixel-physics-voxel-ortho-v6-smoke
-          path: voxel-ortho-v6-smoke.png
+          name: pixel-physics-physics-v7-smoke
+          path: physics-v7-smoke.png
           if-no-files-found: ignore
