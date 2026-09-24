@@ -142,7 +142,7 @@ let fps = 0;
 rig.update(0);
 pipeline.render();
 bootReady();
-requestAnimationFrame(frame);
+globalThis.__voxelBootReady?.();\nrequestAnimationFrame(frame);
 
 function frame(now) {
   requestAnimationFrame(frame);
