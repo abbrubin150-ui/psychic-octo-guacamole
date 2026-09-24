@@ -772,7 +772,10 @@ public final class PixelPhysicsVoxelView extends View {
             c.nx=0;c.ny=0;c.nz=-1f; // normal from body toward floor
             c.px=p.x;c.py=p.y;c.pz=0f;
             c.penetration=Math.max(0f,-bottom);
-            c.friction=envFriction;c.restitution=envRest;
+            c.friction=p.type.renderKind==RenderKind.BALL
+                    ? rollingResistance(p.material)
+                    : envFriction;
+            c.restitution=envRest;
             contacts.add(c);
         }
 
@@ -1076,8 +1079,10 @@ public final class PixelPhysicsVoxelView extends View {
         float kt=ia+ib+rat*rat*iia+rbt*rbt*iib;
         if(kt<1e-8f)return;
         float jt=-(rvx*tx+rvy*ty+rvz*tz)/kt;
-        float maxF=c.friction*j;
-        jt=clamp(jt,-maxF,maxF);
+        float dynamicLimit=c.friction*j;
+        float staticLimit=Math.min(1.35f,c.friction*1.24f)*j;
+        if(Math.abs(jt)>staticLimit)jt=Math.copySign(dynamicLimit,jt);
+        else jt=clamp(jt,-staticLimit,staticLimit);
 
         applyImpulse(a,-jt*tx,-jt*ty,-jt*tz,rax,ray);
         if(b!=null)applyImpulse(b,jt*tx,jt*ty,jt*tz,rbx,rby);
@@ -1172,6 +1177,11 @@ public final class PixelPhysicsVoxelView extends View {
 
     private float friction(MaterialKind m) {
         return m==MaterialKind.RUBBER?0.96f:(m==MaterialKind.METAL?0.36f:0.64f);
+    }
+
+    private float rollingResistance(MaterialKind m) {
+        // Effective rolling coefficient for the reduced-DOF 2.5D ball model.
+        return m==MaterialKind.RUBBER?0.055f:(m==MaterialKind.METAL?0.018f:0.032f);
     }
 
     private void updateGrab(float dt) {
