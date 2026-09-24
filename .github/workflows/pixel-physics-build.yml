@@ -1,9 +1,9 @@
-name: Pixel Physics Isometric 2.5D Canvas Build
+name: Pixel Physics Voxel Ortho v6
 
 on:
   push:
     branches:
-      - pixel-physics-25d-isometric
+      - pixel-physics-voxel-ortho-v6
   pull_request:
   workflow_dispatch:
 
@@ -25,20 +25,20 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
-      - name: Build Canvas APK
+      - name: Build voxel ortho APK
         run: gradle --stacktrace :app:assembleDebug
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-25D-Canvas.apk
-      - name: Verify pure Java APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-VoxelOrtho-v6.apk
+      - name: Verify APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-25D-Canvas.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-25D-Canvas.apk | head -40
-          unzip -t PixelPhysicsSandbox-25D-Canvas.apk
-          ! unzip -l PixelPhysicsSandbox-25D-Canvas.apk | grep -E -q "lib/.*\.so$"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-VoxelOrtho-v6.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-VoxelOrtho-v6.apk | head -40
+          unzip -t PixelPhysicsSandbox-VoxelOrtho-v6.apk
+          ! unzip -l PixelPhysicsSandbox-VoxelOrtho-v6.apk | grep -E -q "lib/.*\.so$"
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-physics-25d-canvas-apk
-          path: PixelPhysicsSandbox-25D-Canvas.apk
+          name: pixel-physics-voxel-ortho-v6-apk
+          path: PixelPhysicsSandbox-VoxelOrtho-v6.apk
           if-no-files-found: error
 
   runtime-smoke:
@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: pixel-physics-25d-canvas-apk
+          name: pixel-physics-voxel-ortho-v6-apk
           path: .
       - name: Android 16 launch and crash check
         uses: reactivecircus/android-emulator-runner@v2
@@ -59,7 +59,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            adb install -r PixelPhysicsSandbox-25D-Canvas.apk
+            adb install -r PixelPhysicsSandbox-VoxelOrtho-v6.apk
             adb logcat -c
             adb shell am force-stop com.pixelphysics.sandbox
             adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
@@ -67,21 +67,19 @@ jobs:
             PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
             echo "PID=$PID"
             if [ -z "$PID" ]; then
-              echo "APP_PROCESS_MISSING"
               adb logcat -d -b crash || true
               adb logcat -d -v threadtime | tail -500 || true
-              adb shell dumpsys activity exit-info com.pixelphysics.sandbox || true
               exit 1
             fi
             if adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
               adb logcat -d -b crash
               exit 1
             fi
-            adb exec-out screencap -p > pixel-physics-25d-canvas-smoke.png
-            test -s pixel-physics-25d-canvas-smoke.png
+            adb exec-out screencap -p > voxel-ortho-v6-smoke.png
+            test -s voxel-ortho-v6-smoke.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pixel-physics-25d-canvas-smoke
-          path: pixel-physics-25d-canvas-smoke.png
+          name: pixel-physics-voxel-ortho-v6-smoke
+          path: voxel-ortho-v6-smoke.png
           if-no-files-found: ignore
