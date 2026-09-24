@@ -30,10 +30,11 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-MVP.apk
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-MVP.apk | head -40
           unzip -t PixelPhysicsSandbox-MVP.apk
+          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx.so"
           unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx-bullet.so"
+          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx.so"
           unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx-bullet.so"
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: pixel-physics-apk
           path: PixelPhysicsSandbox-MVP.apk
@@ -41,9 +42,8 @@ jobs:
 
   runtime-smoke:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: macos-13
     timeout-minutes: 12
-    continue-on-error: true
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -60,18 +60,14 @@ jobs:
           script: |
             adb install -r PixelPhysicsSandbox-MVP.apk
             adb logcat -c
-            adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
-            sleep 8
-            PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
-            if [ -z "$PID" ]; then
-              echo "APP_PROCESS_MISSING"
-              adb logcat -d -b crash || true
-              adb logcat -d -v threadtime | tail -400 || true
-              adb shell dumpsys activity exit-info com.pixelphysics.sandbox || true
-              exit 1
-            fi
-            if adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
-              adb logcat -d -b crash
-              exit 1
-            fi
-            echo "Smoke test process PID: $PID"
+            adb shell am start -n com.pixelphysics.sandbox/.AndroidLauncher
+            sleep 12
+            adb shell pidof com.pixelphysics.sandbox || { echo APP_PROCESS_MISSING; adb logcat -d -b crash || true; adb logcat -d -v threadtime | tail -400 || true; adb shell dumpsys activity exit-info com.pixelphysics.sandbox || true; exit 1; }
+            ! adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox" || { adb logcat -d -b crash; exit 1; }
+            adb exec-out screencap -p > pixel-physics-smoke.png
+            test -s pixel-physics-smoke.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pixel-physics-smoke
+          path: pixel-physics-smoke.png
+          if-no-files-found: error
