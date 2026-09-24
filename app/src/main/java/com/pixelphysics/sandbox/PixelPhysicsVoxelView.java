@@ -817,8 +817,8 @@ public final class PixelPhysicsVoxelView extends View {
         float denomT=p.invMass()+crossT*crossT*p.invInertia();
         if(denomT>1e-7f){
             float jt=-vt/denomT;
-            float maxF=mu*j;
-            jt=clamp(jt,-maxF,maxF);
+            float muS=Math.min(1.35f,mu*1.24f);
+            if(Math.abs(jt)>muS*j)jt=Math.copySign(mu*j,jt);
             applyXYImpulse(p,jt*tx,jt*ty,rx,ry);
         }
     }
@@ -830,7 +830,10 @@ public final class PixelPhysicsVoxelView extends View {
             float s=(speed-dv)/speed;
             p.vx*=s;p.vy*=s;
         }
-        p.spin*=Math.max(0f,1f-mu*0.10f);
+        // Approximate torsional friction from the same normal impulse.
+        float maxDw=mu*normalDeltaV/Math.max(0.02f,p.radius())*0.12f;
+        if(p.spin>0f)p.spin=Math.max(0f,p.spin-maxDw);
+        else if(p.spin<0f)p.spin=Math.min(0f,p.spin+maxDw);
     }
 
     private void solveWorldPositions() {
@@ -972,9 +975,9 @@ public final class PixelPhysicsVoxelView extends View {
                 float denom=invA+invB+raCross*raCross*a.invInertia()+rbCross*rbCross*b.invInertia();
                 if(denom>1e-7f){
                     float jt=-ts/denom;
-                    float mu=(float)Math.sqrt(friction(a.material)*friction(b.material));
-                    float maxF=mu*j;
-                    jt=clamp(jt,-maxF,maxF);
+                    float muD=(float)Math.sqrt(friction(a.material)*friction(b.material));
+                    float muS=Math.min(1.35f,muD*1.24f);
+                    if(Math.abs(jt)>muS*j)jt=Math.copySign(muD*j,jt);
                     applyXYImpulse(a,-jt*tx,-jt*ty,rax,ray);
                     applyXYImpulse(b, jt*tx, jt*ty,rbx,rby);
                 }
@@ -1016,9 +1019,9 @@ public final class PixelPhysicsVoxelView extends View {
         float denomT=invA+invB+raT*raT*a.invInertia()+rbT*rbT*b.invInertia();
         if(denomT>1e-7f){
             float jt=-vt/denomT;
-            float mu=(float)Math.sqrt(friction(a.material)*friction(b.material));
-            float maxF=mu*j;
-            jt=clamp(jt,-maxF,maxF);
+            float muD=(float)Math.sqrt(friction(a.material)*friction(b.material));
+            float muS=Math.min(1.35f,muD*1.24f);
+            if(Math.abs(jt)>muS*j)jt=Math.copySign(muD*j,jt);
             applyXYImpulse(a,-jt*tx,-jt*ty,rax,ray);
             applyXYImpulse(b, jt*tx, jt*ty,rbx,rby);
         }
