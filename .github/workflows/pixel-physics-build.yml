@@ -1,62 +1,92 @@
-name: Pixel Physics Physics v7
+name: Pixel Physics Enterprise v8
 
 concurrency:
-  group: physics-v7-${{ github.ref }}
+  group: enterprise-v8-${{ github.ref }}
   cancel-in-progress: true
 
 on:
   push:
     branches:
-      - pixel-physics-physics-v7
+      - pixel-physics-enterprise-v8
   pull_request:
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned web dependencies
+        run: npm install --prefix web --ignore-scripts --no-audit --no-fund
+
+      - name: Run v8 contract tests
+        run: npm test --prefix web
+
+      - name: Build local offline web runtime
+        run: npm run build --prefix web
+
+      - name: Verify generated runtime
+        run: |
+          test -s app/src/main/assets/www/index.html
+          test -s app/src/main/assets/www/style.css
+          test -s app/src/main/assets/www/game.js
+          grep -q "game.js" app/src/main/assets/www/index.html
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
+
       - name: Verify Android SDK
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
-      - name: Run deterministic physics tests
+
+      - name: Run Android unit tests
         run: gradle --stacktrace :app:testDebugUnitTest
-      - name: Build Physics v7 APK
+
+      - name: Build Enterprise v8 APK
         run: gradle --stacktrace :app:assembleDebug
+
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-Physics-v7.apk
-      - name: Verify APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-Enterprise-v8.apk
+
+      - name: Verify signed self-contained APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-Physics-v7.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-Physics-v7.apk | head -40
-          unzip -t PixelPhysicsSandbox-Physics-v7.apk
-          ! unzip -l PixelPhysicsSandbox-Physics-v7.apk | grep -E -q "lib/.*\.so$"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-Enterprise-v8.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-Enterprise-v8.apk | head -40
+          unzip -t PixelPhysicsSandbox-Enterprise-v8.apk
+          unzip -l PixelPhysicsSandbox-Enterprise-v8.apk | grep -q "assets/www/game.js"
+          unzip -l PixelPhysicsSandbox-Enterprise-v8.apk | grep -q "assets/www/index.html"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-physics-physics-v7-apk
-          path: PixelPhysicsSandbox-Physics-v7.apk
+          name: pixel-physics-enterprise-v8-apk
+          path: PixelPhysicsSandbox-Enterprise-v8.apk
           if-no-files-found: error
 
   runtime-smoke:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: pixel-physics-physics-v7-apk
+          name: pixel-physics-enterprise-v8-apk
           path: .
-      - name: Android 16 physics soak
+
+      - name: Android 16 cold-start and interaction soak
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -65,30 +95,53 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            adb install -r PixelPhysicsSandbox-Physics-v7.apk
+            adb install -r PixelPhysicsSandbox-Enterprise-v8.apk
             adb logcat -c
             adb shell am force-stop com.pixelphysics.sandbox
             adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
-            sleep 10
-            adb shell input swipe 900 520 1120 430 800 || true
-            adb shell input swipe 1040 520 1240 590 800 || true
-            sleep 20
+            sleep 12
+
             PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
             echo "PID=$PID"
             if [ -z "$PID" ]; then
               adb logcat -d -b crash || true
-              adb logcat -d -v threadtime | tail -600 || true
+              adb logcat -d -v threadtime | tail -800 || true
               exit 1
             fi
+
+            # Exercise camera/object input paths. Coordinates are intentionally broad:
+            # the app is landscape and the gesture system uses fat-finger acquisition.
+            adb shell input swipe 500 450 760 400 700 || true
+            adb shell input swipe 850 500 1020 360 650 || true
+            adb shell input tap 600 420 || true
+            sleep 20
+
+            PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
+            if [ -z "$PID" ]; then
+              adb logcat -d -b crash || true
+              adb logcat -d -v threadtime | tail -800 || true
+              exit 1
+            fi
+
             if adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
               adb logcat -d -b crash
               exit 1
             fi
-            adb exec-out screencap -p > physics-v7-smoke.png
-            test -s physics-v7-smoke.png
+
+            if adb logcat -d -s PixelPhysicsV8:E | grep -q "fault"; then
+              adb logcat -d -s PixelPhysicsV8:E
+              exit 1
+            fi
+
+            adb logcat -d -s PixelPhysicsV8:I > enterprise-v8-metrics.txt || true
+            adb exec-out screencap -p > enterprise-v8-smoke.png
+            test -s enterprise-v8-smoke.png
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pixel-physics-physics-v7-smoke
-          path: physics-v7-smoke.png
+          name: pixel-physics-enterprise-v8-smoke
+          path: |
+            enterprise-v8-smoke.png
+            enterprise-v8-metrics.txt
           if-no-files-found: ignore
