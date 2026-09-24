@@ -3,7 +3,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Voxel Dynamics"
+        android:label="Pixel Physics Lab"
         android:theme="@style/AppTheme"
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="false">
