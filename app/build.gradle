@@ -8,8 +8,8 @@ android {
         applicationId 'com.pixelphysics.sandbox'
         minSdk 26
         targetSdk 35
-        versionCode 9
-        versionName '0.8.1-voxel-dynamics'
+        versionCode 10
+        versionName '0.8.1-pixel-physics-lab'
     }
 
     compileOptions {
