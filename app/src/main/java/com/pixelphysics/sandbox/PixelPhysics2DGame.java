@@ -438,6 +438,16 @@ public class PixelPhysics2DGame extends ApplicationAdapter implements InputProce
             cs.setRadius(r);
             shape=cs;
             area=MathUtils.PI*r*r;
+        } else if(type==PropType.RAMP) {
+            PolygonShape ps=new PolygonShape();
+            float hw=type.wPx/(2f*PPM),hh=type.hPx/(2f*PPM);
+            ps.set(new Vector2[]{
+                    new Vector2(-hw,-hh),
+                    new Vector2(hw,-hh),
+                    new Vector2(hw,hh)
+            });
+            shape=ps;
+            area=(type.wPx/PPM)*(type.hPx/PPM)*0.5f;
         } else {
             PolygonShape ps=new PolygonShape();
             float hw=type.wPx/(2f*PPM),hh=type.hPx/(2f*PPM);
