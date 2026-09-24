@@ -11,6 +11,6 @@ public class AndroidLauncher extends AndroidApplication {
         AndroidApplicationConfiguration cfg = new AndroidApplicationConfiguration();
         cfg.useImmersiveMode = true;
         cfg.useWakelock = true;
-        initialize(new PixelPhysicsGame(), cfg);
+        initialize(new PixelPhysics2DGame(), cfg);
     }
 }
