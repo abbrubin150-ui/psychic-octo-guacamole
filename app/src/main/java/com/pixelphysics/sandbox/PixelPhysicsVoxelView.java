@@ -264,9 +264,15 @@ public final class PixelPhysicsVoxelView extends View {
             return inertia>1e-7f ? 1f/inertia : 0f;
         }
 
+        float collisionYaw() {
+            if(circularFootprint()) return 0f;
+            float quarter=(float)(Math.PI*0.5);
+            return Math.round(yaw/quarter)*quarter;
+        }
+
         void syncShape() {
             if(circularFootprint()) shape.setCircle(x,y,radius());
-            else shape.setBox(x,y,yaw,halfW(),halfD());
+            else shape.setBox(x,y,collisionYaw(),halfW(),halfD());
         }
 
         void wake() {
@@ -907,7 +913,8 @@ public final class PixelPhysicsVoxelView extends View {
         if(lower.type!=PropType.STAIRS)return lower.top();
 
         // The voxel staircase is 8 steps along its local +X axis.
-        float c=(float)Math.cos(lower.yaw),s=(float)Math.sin(lower.yaw);
+        float stairYaw=lower.collisionYaw();
+        float c=(float)Math.cos(stairYaw),s=(float)Math.sin(stairYaw);
         float dx=worldX-lower.x,dy=worldY-lower.y;
         float lx=dx*c+dy*s;
         float ly=-dx*s+dy*c;
@@ -1061,6 +1068,8 @@ public final class PixelPhysicsVoxelView extends View {
                 if(p.sleepTimer>=SLEEP_DELAY){
                     p.sleeping=true;
                     p.vx=p.vy=p.vz=p.spin=0f;
+                    p.yaw=p.collisionYaw();
+                    p.syncShape();
                 }
             }else{
                 p.sleepTimer=0f;
