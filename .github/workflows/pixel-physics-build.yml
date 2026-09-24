@@ -1,8 +1,8 @@
-name: Pixel Physics Pure 2D Build
+name: Pixel Physics Isometric 2.5D Build
 on:
   push:
     branches:
-      - pixel-physics-pure-2d
+      - pixel-physics-25d-isometric
   pull_request:
   workflow_dispatch:
 
@@ -24,22 +24,21 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
-      - name: Build pure 2D APK
+      - name: Build isometric 2.5D APK
         run: gradle --stacktrace :app:assembleDebug
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-Pure2D.apk
-      - name: Verify pure 2D APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-25D.apk
+      - name: Verify isometric 2.5D APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-Pure2D.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-Pure2D.apk | head -40
-          unzip -t PixelPhysicsSandbox-Pure2D.apk
-          unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "lib/arm64-v8a/libgdx.so"
-          unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "lib/arm64-v8a/libgdx-box2d.so"
-          unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "lib/x86_64/libgdx.so"
-          unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "lib/x86_64/libgdx-box2d.so"
-          ! unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "libgdx-bullet.so"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-25D.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-25D.apk | head -40
+          unzip -t PixelPhysicsSandbox-25D.apk
+          unzip -l PixelPhysicsSandbox-25D.apk | grep -q "lib/arm64-v8a/libgdx.so"
+          unzip -l PixelPhysicsSandbox-25D.apk | grep -q "lib/x86_64/libgdx.so"
+          ! unzip -l PixelPhysicsSandbox-25D.apk | grep -q "libgdx-box2d.so"
+          ! unzip -l PixelPhysicsSandbox-25D.apk | grep -q "libgdx-bullet.so"
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-physics-pure-2d-apk
-          path: PixelPhysicsSandbox-Pure2D.apk
+          name: pixel-physics-25d-apk
+          path: PixelPhysicsSandbox-25D.apk
           if-no-files-found: error
