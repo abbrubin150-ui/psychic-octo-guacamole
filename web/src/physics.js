@@ -20,7 +20,9 @@ export class PhysicsKernel {
   }
 
   async init() {
-    await RAPIER.init();
+    await RAPIER.init({
+      module_or_path: new URL("./rapier_wasm3d_bg.wasm", import.meta.url)
+    });
 
     this.world = new RAPIER.World(PHYSICS.gravity);
     this.eventQueue = new RAPIER.EventQueue(true);
