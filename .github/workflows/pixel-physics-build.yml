@@ -33,6 +33,7 @@ jobs:
           unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx-bullet.so"
           unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx-bullet.so"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: pixel-physics-apk
           path: PixelPhysicsSandbox-MVP.apk
