@@ -81,3 +81,61 @@ body {
   transform: translate(1px, 1px);
   background: #3b4652;
 }
+
+
+#boot {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(135deg, rgba(27, 33, 43, 0.98), rgba(9, 12, 18, 0.99));
+  color: #f4e8d4;
+  pointer-events: none;
+}
+
+#boot[hidden] {
+  display: none;
+}
+
+.boot-card {
+  width: min(78%, 360px);
+  padding: 18px 16px;
+  border: 3px solid #090a0d;
+  box-shadow:
+    0 0 0 2px #655449 inset,
+    6px 6px 0 #07090d;
+  background: #1a2028;
+}
+
+.boot-title {
+  margin-bottom: 12px;
+  color: #f0c06a;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.boot-message {
+  min-height: 34px;
+  color: #d7dde5;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.boot-version {
+  margin-top: 12px;
+  color: #7f8d9b;
+  font-size: 9px;
+}
+
+#boot.fatal .boot-title {
+  color: #ff806c;
+}
+
+#boot.fatal .boot-message {
+  color: #ffd8d2;
+}
