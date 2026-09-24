@@ -542,14 +542,11 @@ public class PixelPhysics2DGame extends ApplicationAdapter implements InputProce
         final Prop[] hit={null};
         world.QueryAABB(fixture->{
             Body b=fixture.getBody();
-            if(b.getType()!=BodyDef.BodyType.StaticBody || byId.containsKey((Integer)b.getUserData())){
-                if(fixture.testPoint(wx,wy)){
-                    Object data=b.getUserData();
-                    if(data instanceof Integer) hit[0]=byId.get((Integer)data);
-                    return false;
-                }
-            }
-            return true;
+            Object data=b.getUserData();
+            if(!(data instanceof Integer)) return true;
+            if(!fixture.testPoint(wx,wy)) return true;
+            hit[0]=byId.get((Integer)data);
+            return false;
         },wx-0.02f,wy-0.02f,wx+0.02f,wy+0.02f);
         return hit[0];
     }
