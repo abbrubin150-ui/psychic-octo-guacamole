@@ -4,12 +4,43 @@ import { PointerFusion } from "./input.js";
 import { Telemetry } from "./telemetry.js";
 import { RENDER, SAVE_SCHEMA } from "./config.js";
 
+const bootEl = document.querySelector("#boot");
+
+function bootMessage(message) {
+  if (!bootEl) return;
+  bootEl.hidden = false;
+  const msg = bootEl.querySelector("[data-role=message]");
+  if (msg) msg.textContent = message;
+}
+
+function bootReady() {
+  if (bootEl) bootEl.hidden = true;
+  globalThis.__PIXEL_PHYSICS_READY__ = true;
+  globalThis.AndroidBridge?.log?.("info", "APP_READY Pixel Physics Lab 0.8.1");
+}
+
+function bootFatal(error) {
+  const message = String(error?.stack || error?.message || error || "Unknown startup failure");
+  globalThis.__PIXEL_PHYSICS_READY__ = false;
+  globalThis.AndroidBridge?.log?.("error", "BOOT_FATAL " + message);
+  if (!bootEl) return;
+  bootEl.hidden = false;
+  bootEl.classList.add("fatal");
+  const title = bootEl.querySelector("[data-role=title]");
+  const msg = bootEl.querySelector("[data-role=message]");
+  if (title) title.textContent = "STARTUP ERROR";
+  if (msg) msg.textContent = message.slice(0, 420);
+}
+
+async function bootstrap() {
+  bootMessage("INITIALIZING RENDERER…");
 const canvas = document.querySelector("#game");
 const statusEl = document.querySelector("#status");
 const contextEl = document.querySelector("#context");
 const telemetry = new Telemetry(globalThis.AndroidBridge);
 telemetry.installGlobalFaultHooks();
 
+bootMessage("STARTING WEBGL…");
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: false,
@@ -44,12 +75,14 @@ sun.shadow.bias = -0.0008;
 scene.add(sun);
 
 const pipeline = new PixelPipeline(renderer, scene, camera);
+bootMessage("LOADING PHYSICS CORE…");
 const physics = await new PhysicsKernel(telemetry).init();
 const grabber = new ContactPointGrabber(physics, telemetry);
 const raycaster = new THREE.Raycaster();
 const dynamicRoots = [];
 const spawnRecords = new Map();
 
+bootMessage("BUILDING WORKSHOP…");
 buildWorkshop();
 await restoreOrCreateWorld();
 
@@ -106,6 +139,9 @@ let fpsAccum = 0;
 let fpsFrames = 0;
 let fps = 0;
 
+rig.update(0);
+pipeline.render();
+bootReady();
 requestAnimationFrame(frame);
 
 function frame(now) {
@@ -454,7 +490,7 @@ function captureState() {
   }
   return {
     schema: SAVE_SCHEMA,
-    version: "0.8.0-enterprise-v8",
+    version: "0.8.1-enterprise-v8-hotfix",
     savedAt: Date.now(),
     camera: rig.snapshot(),
     objects
@@ -673,3 +709,7 @@ function structuredCloneSafe(value) {
   if (globalThis.structuredClone) return structuredClone(value);
   return JSON.parse(JSON.stringify(value));
 }
+
+}
+
+bootstrap().catch(bootFatal);
