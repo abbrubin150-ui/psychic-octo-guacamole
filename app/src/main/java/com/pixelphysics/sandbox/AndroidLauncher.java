@@ -4,19 +4,26 @@ import android.app.Activity;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.Gravity;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.webkit.WebViewAssetLoader;
 
 public class AndroidLauncher extends Activity {
+    private static final String TAG = "PixelPhysicsV8";
     private static final String APP_ORIGIN = "https://appassets.androidplatform.net";
     private WebView webView;
 
@@ -27,6 +34,10 @@ public class AndroidLauncher extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+        startWebRuntime();
+    }
+
+    private void startWebRuntime() {
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
@@ -45,10 +56,30 @@ public class AndroidLauncher extends Activity {
         s.setSupportZoom(false);
         s.setMediaPlaybackRequiresUserGesture(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
         webView.addJavascriptInterface(new AndroidBridge(this), "AndroidBridge");
-        webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage message) {
+                String text = "JS " + message.messageLevel() + " "
+                        + message.message() + " @"
+                        + message.sourceId() + ":" + message.lineNumber();
+                switch (message.messageLevel()) {
+                    case ERROR:
+                        Log.e(TAG, text);
+                        break;
+                    case WARNING:
+                        Log.w(TAG, text);
+                        break;
+                    default:
+                        Log.i(TAG, text);
+                        break;
+                }
+                return true;
+            }
+        });
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public @Nullable WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -61,10 +92,45 @@ public class AndroidLauncher extends Activity {
                 return !("https".equals(u.getScheme())
                         && "appassets.androidplatform.net".equals(u.getHost()));
             }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                Log.e(TAG, "WEB_ERROR code=" + error.getErrorCode()
+                        + " desc=" + error.getDescription()
+                        + " url=" + request.getUrl());
+            }
+
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                Log.e(TAG, "WEBVIEW_RENDERER_GONE crash=" + detail.didCrash());
+                showNativeFatal("Renderer process stopped. Reopen Pixel Physics Lab.");
+                return true;
+            }
         });
 
         setContentView(webView);
+        Log.i(TAG, "HOST_START Pixel Physics Lab 0.8.1");
         webView.loadUrl(APP_ORIGIN + "/assets/www/index.html");
+    }
+
+    private void showNativeFatal(String message) {
+        if (webView != null) {
+            try {
+                webView.destroy();
+            } catch (Throwable ignored) {
+            }
+            webView = null;
+        }
+
+        TextView fallback = new TextView(this);
+        fallback.setBackgroundColor(Color.rgb(11, 14, 20));
+        fallback.setTextColor(Color.rgb(255, 216, 210));
+        fallback.setTextSize(18);
+        fallback.setGravity(Gravity.CENTER);
+        fallback.setPadding(40, 40, 40, 40);
+        fallback.setText("PIXEL PHYSICS LAB\n\n" + message);
+        setContentView(fallback);
     }
 
     @Override
