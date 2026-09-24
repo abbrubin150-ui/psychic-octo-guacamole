@@ -1,4 +1,5 @@
 name: Pixel Physics Isometric 2.5D Build
+
 on:
   push:
     branches:
@@ -43,41 +44,6 @@ jobs:
           path: PixelPhysicsSandbox-25D.apk
           if-no-files-found: error
 
-
-  runtime-smoke:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: pixel-physics-25d-apk
-          path: .
-      - name: Android 16 launch + crash log
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 36
-          arch: x86_64
-          profile: pixel_2
-          disable-animations: true
-          disable-linux-hw-accel: true
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            adb install -r PixelPhysicsSandbox-25D.apk
-            adb logcat -c
-            adb shell am force-stop com.pixelphysics.sandbox
-            adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
-            sleep 15
-            echo "PID:"
-            adb shell pidof com.pixelphysics.sandbox || true
-            echo "CRASH BUFFER:"
-            adb logcat -d -b crash || true
-            echo "APP LOGS:"
-            adb logcat -d -v threadtime | grep -E "com.pixelphysics.sandbox|AndroidRuntime|FATAL EXCEPTION|libgdx|PixelPhysics" | tail -300 || true
-            adb shell pidof com.pixelphysics.sandbox >/dev/null
-            ! adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"
-
-
   runtime-smoke:
     needs: build
     runs-on: ubuntu-latest
@@ -87,15 +53,10 @@ jobs:
         with:
           name: pixel-physics-25d-apk
           path: .
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm || true
-      - name: Android runtime smoke
+      - name: Android 16 launch and crash check
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 36
           arch: x86_64
           profile: pixel_2
           disable-animations: true
@@ -103,9 +64,11 @@ jobs:
           script: |
             adb install -r PixelPhysicsSandbox-25D.apk
             adb logcat -c
+            adb shell am force-stop com.pixelphysics.sandbox
             adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
-            sleep 12
+            sleep 15
             PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
+            echo "PID=$PID"
             if [ -z "$PID" ]; then
               echo "APP_PROCESS_MISSING"
               adb logcat -d -b crash || true
