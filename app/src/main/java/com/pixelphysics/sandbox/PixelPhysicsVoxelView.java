@@ -852,41 +852,150 @@ public final class PixelPhysicsVoxelView extends View {
         float rr=a.broadRadius()+b.broadRadius()+CONTACT_SLOP*2f;
         if(dxBroad*dxBroad+dyBroad*dyBroad>rr*rr)return;
 
-        Hit2 h=horizontalHit(a,b);
-        if(!h.hit)return;
+        // Stair treads override the staircase's enclosing box when an object is
+        // approaching from above.
+        if(a.type==PropType.STAIRS || b.type==PropType.STAIRS){
+            Hit2 stairFootprint=horizontalHit(a,b);
+            if(stairFootprint.hit){
+                Contact stair=stairContact(a,b,stairFootprint);
+                if(stair!=null){
+                    contacts.add(stair);
+                    return;
+                }
+            }
+        }
 
-        // Stair treads are a height-field on top of one rigid footprint rather
-        // than a fake flat lid. This keeps the visual staircase physically usable.
-        Contact stair=stairContact(a,b,h);
-        if(stair!=null){
-            contacts.add(stair);
+        // Hybrid non-voxel balls use true 3D sphere contacts.
+        if(a.type.renderKind==RenderKind.BALL && b.type.renderKind==RenderKind.BALL){
+            Contact sphere=sphereSphereContact(a,b);
+            if(sphere!=null)contacts.add(sphere);
             return;
         }
 
-        float zGap;
+        if(a.type.renderKind==RenderKind.BALL && !b.circleFootprint()){
+            Contact sphere=sphereBoxContact(a,b);
+            if(sphere!=null)contacts.add(sphere);
+            return;
+        }
+        if(b.type.renderKind==RenderKind.BALL && !a.circleFootprint()){
+            Contact sphere=sphereBoxContact(b,a);
+            if(sphere!=null)contacts.add(sphere);
+            return;
+        }
+
+        Hit2 h=horizontalHit(a,b);
+        if(!h.hit)return;
+
         float zPen=Math.min(a.top(),b.top())-Math.max(a.bottom(),b.bottom());
         if(zPen<-CONTACT_SLOP)return;
 
         boolean verticalAxis=zPen<=h.penetration+CONTACT_SLOP;
-        Contact c=new Contact();
-        c.a=a;c.b=b;
-        c.friction=(float)Math.sqrt(friction(a.material)*friction(b.material));
-        c.restitution=(float)Math.sqrt(restitution(a.material)*restitution(b.material));
+        Contact contact=new Contact();
+        contact.a=a;contact.b=b;
+        contact.friction=(float)Math.sqrt(friction(a.material)*friction(b.material));
+        contact.restitution=(float)Math.sqrt(restitution(a.material)*restitution(b.material));
 
         if(verticalAxis){
             boolean bAbove=b.z>=a.z;
-            c.nx=0f;c.ny=0f;c.nz=bAbove?1f:-1f;
-            c.px=(a.x+b.x)*0.5f;
-            c.py=(a.y+b.y)*0.5f;
-            c.pz=bAbove?Math.min(a.top(),b.bottom()):Math.max(a.bottom(),b.top());
-            c.penetration=Math.max(0f,zPen);
+            contact.nx=0f;contact.ny=0f;contact.nz=bAbove?1f:-1f;
+            contact.px=(a.x+b.x)*0.5f;
+            contact.py=(a.y+b.y)*0.5f;
+            contact.pz=bAbove?Math.min(a.top(),b.bottom()):Math.max(a.bottom(),b.top());
+            contact.penetration=Math.max(0f,zPen);
         }else{
-            c.nx=h.nx;c.ny=h.ny;c.nz=0f;
-            c.px=h.px;c.py=h.py;
-            c.pz=(Math.max(a.bottom(),b.bottom())+Math.min(a.top(),b.top()))*0.5f;
-            c.penetration=Math.max(0f,h.penetration);
+            contact.nx=h.nx;contact.ny=h.ny;contact.nz=0f;
+            contact.px=h.px;contact.py=h.py;
+            contact.pz=(Math.max(a.bottom(),b.bottom())+Math.min(a.top(),b.top()))*0.5f;
+            contact.penetration=Math.max(0f,h.penetration);
         }
-        contacts.add(c);
+        contacts.add(contact);
+    }
+
+    private Contact sphereSphereContact(Prop a,Prop b) {
+        float dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
+        float ra=a.type.wMeters()*0.5f,rb=b.type.wMeters()*0.5f;
+        float sum=ra+rb;
+        float d2=dx*dx+dy*dy+dz*dz;
+        float limit=sum+CONTACT_SLOP;
+        if(d2>limit*limit)return null;
+
+        float d=(float)Math.sqrt(Math.max(d2,1e-12f));
+        float nx,ny,nz;
+        if(d<0.000001f){nx=1f;ny=0f;nz=0f;}
+        else{nx=dx/d;ny=dy/d;nz=dz/d;}
+
+        Contact contact=new Contact();
+        contact.a=a;contact.b=b;
+        contact.nx=nx;contact.ny=ny;contact.nz=nz;
+        contact.penetration=Math.max(0f,sum-d);
+        float along=ra-contact.penetration*0.5f;
+        contact.px=a.x+nx*along;
+        contact.py=a.y+ny*along;
+        contact.pz=a.z+nz*along;
+        contact.friction=(float)Math.sqrt(friction(a.material)*friction(b.material));
+        contact.restitution=(float)Math.sqrt(restitution(a.material)*restitution(b.material));
+        return contact;
+    }
+
+    private Contact sphereBoxContact(Prop sphere,Prop box) {
+        float radius=sphere.type.wMeters()*0.5f;
+        float dx=sphere.x-box.x,dy=sphere.y-box.y,dz=sphere.z-box.z;
+        float cs=(float)Math.cos(box.yaw),sn=(float)Math.sin(box.yaw);
+
+        float lx= cs*dx+sn*dy;
+        float ly=-sn*dx+cs*dy;
+        float lz=dz;
+
+        float hx=box.halfW(),hy=box.halfD(),hz=box.type.hMeters()*0.5f;
+        float qx=clamp(lx,-hx,hx);
+        float qy=clamp(ly,-hy,hy);
+        float qz=clamp(lz,-hz,hz);
+
+        float ex=qx-lx,ey=qy-ly,ez=qz-lz; // sphere -> closest box point
+        float d2=ex*ex+ey*ey+ez*ez;
+
+        float nlx,nly,nlz,penetration;
+        if(d2>1e-12f){
+            float d=(float)Math.sqrt(d2);
+            if(d>radius+CONTACT_SLOP)return null;
+            nlx=ex/d;nly=ey/d;nlz=ez/d;
+            penetration=Math.max(0f,radius-d);
+        }else{
+            float toX=hx-Math.abs(lx);
+            float toY=hy-Math.abs(ly);
+            float toZ=hz-Math.abs(lz);
+            if(toX<=toY && toX<=toZ){
+                float outward=lx>=0?1f:-1f;
+                nlx=-outward;nly=0f;nlz=0f;
+                qx=outward*hx;qy=ly;qz=lz;
+                penetration=radius+toX;
+            }else if(toY<=toZ){
+                float outward=ly>=0?1f:-1f;
+                nlx=0f;nly=-outward;nlz=0f;
+                qx=lx;qy=outward*hy;qz=lz;
+                penetration=radius+toY;
+            }else{
+                float outward=lz>=0?1f:-1f;
+                nlx=0f;nly=0f;nlz=-outward;
+                qx=lx;qy=ly;qz=outward*hz;
+                penetration=radius+toZ;
+            }
+        }
+
+        float nx=cs*nlx-sn*nly;
+        float ny=sn*nlx+cs*nly;
+        float nz=nlz;
+
+        Contact contact=new Contact();
+        contact.a=sphere;contact.b=box;
+        contact.nx=nx;contact.ny=ny;contact.nz=nz;
+        contact.penetration=penetration;
+        contact.px=box.x+cs*qx-sn*qy;
+        contact.py=box.y+sn*qx+cs*qy;
+        contact.pz=box.z+qz;
+        contact.friction=(float)Math.sqrt(friction(sphere.material)*friction(box.material));
+        contact.restitution=(float)Math.sqrt(restitution(sphere.material)*restitution(box.material));
+        return contact;
     }
 
     private Contact stairContact(Prop a,Prop b,Hit2 h) {
