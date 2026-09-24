@@ -714,7 +714,9 @@ public final class PixelPhysicsVoxelView extends View {
         for(int i=0;i<props.size();i++){
             Prop p=props.get(i);
             if(p.frozen||p.sleeping)continue;
-            float speed=(float)Math.sqrt(p.vx*p.vx+p.vy*p.vy+p.vz*p.vz);
+            float linearSpeed=(float)Math.sqrt(p.vx*p.vx+p.vy*p.vy+p.vz*p.vz);
+            float angularTipSpeed=Math.abs(p.spin)*p.broadRadius();
+            float speed=linearSpeed+angularTipSpeed;
             worst=Math.max(worst,speed);
             float feature=Math.min(p.type.wMeters(),Math.min(p.type.dMeters(),p.type.hMeters()));
             smallest=Math.min(smallest,Math.max(0.025f,feature));
