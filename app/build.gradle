@@ -8,8 +8,8 @@ android {
         applicationId 'com.pixelphysics.sandbox'
         minSdk 26
         targetSdk 35
-        versionCode 7
-        versionName '0.6.0-physics-v7'
+        versionCode 8
+        versionName '0.8.0-enterprise-v8'
     }
 
     compileOptions {
@@ -25,5 +25,6 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
     testImplementation 'junit:junit:4.13.2'
 }
