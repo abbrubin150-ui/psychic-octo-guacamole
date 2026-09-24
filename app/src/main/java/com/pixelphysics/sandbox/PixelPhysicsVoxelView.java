@@ -584,6 +584,8 @@ public final class PixelPhysicsVoxelView extends View {
         nextId=Math.max(nextId,p.id+1);
         p.type=type;p.material=material;
         p.x=x;p.y=y;p.z=z;p.yaw=yaw;p.frozen=frozen;
+        p.sleeping=frozen;
+        p.sleepTimer=0f;
         props.add(p);byId.put(p.id,p);
         return p;
     }
@@ -636,6 +638,9 @@ public final class PixelPhysicsVoxelView extends View {
         });
         p.frozen=frozen;
         p.vx=p.vy=p.vz=p.spin=0f;
+        p.sleeping=frozen;
+        p.sleepTimer=0f;
+        if(!frozen)p.wake();
         feedback();saveWorld();
     }
 
@@ -1539,23 +1544,31 @@ public final class PixelPhysicsVoxelView extends View {
     private void startGrab(Prop p,float sx,float sy) {
         if(p==null||p.frozen)return;
         grabbed=p;mode=Mode.GRAB;
+        p.wake();
+
         PointF w=unprojectAtZ(sx,sy,p.z);
-        grabOffsetX=w.x-p.x;grabOffsetY=w.y-p.y;
-        targetX=p.x;targetY=p.y;targetZ=p.z;
+        float dx=w.x-p.x,dy=w.y-p.y;
+        float cs=(float)Math.cos(p.yaw),sn=(float)Math.sin(p.yaw);
+        grabLocalX= cs*dx+sn*dy;
+        grabLocalY=-sn*dx+cs*dy;
+        grabLocalZ=0f;
+
+        targetX=w.x;
+        targetY=w.y;
+        targetZ=p.z;
+        targetYaw=p.yaw;
     }
 
     private void updateGrabTarget(float sx,float sy) {
         if(grabbed==null)return;
         PointF w=unprojectAtZ(sx,sy,targetZ);
-        targetX=clamp(w.x-grabOffsetX,-ROOM+grabbed.radius(),ROOM-grabbed.radius());
-        targetY=clamp(w.y-grabOffsetY,-ROOM+grabbed.radius(),ROOM-grabbed.radius());
+        float margin=Math.max(0.02f,grabbed.radius()*0.35f);
+        targetX=clamp(w.x,-ROOM+margin,ROOM-margin);
+        targetY=clamp(w.y,-ROOM+margin,ROOM-margin);
     }
 
     private void endGrab() {
-        if(grabbed!=null){
-            // Visual rotation is always one of four exact model rotations.
-            grabbed.yaw=directionIndex(grabbed.yaw)*(float)(Math.PI/2.0);
-        }
+        if(grabbed!=null)grabbed.wake();
         grabbed=null;secondaryId=-1;
         if(mode==Mode.GRAB)mode=Mode.IDLE;
     }
@@ -1619,7 +1632,8 @@ public final class PixelPhysicsVoxelView extends View {
 
                     float a=angle(x1,y1,x2,y2);
                     float da=wrapAngle(a-lastTwoAngle);
-                    grabbed.yaw+=da;grabbed.spin+=da*2.0f;
+                    targetYaw=wrapAngle(targetYaw+da);
+                    grabbed.wake();
                     lastTwoDistance=dist;lastTwoAngle=a;
                     updateGrabTarget(primaryX,primaryY);
                 }
