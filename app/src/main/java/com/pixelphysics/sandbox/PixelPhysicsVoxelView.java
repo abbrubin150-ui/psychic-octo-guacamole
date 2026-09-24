@@ -93,8 +93,11 @@ public final class PixelPhysicsVoxelView extends View {
     private final ArrayList<Prop> drawOrder = new ArrayList<>();
     private final HashMap<Integer, Prop> byId = new HashMap<>();
     private final ArrayDeque<UndoAction> undo = new ArrayDeque<>();
+    // contacts is a reusable pool; activeContactCount marks the live prefix.
     private final ArrayList<Contact> contacts = new ArrayList<>();
+    private int activeContactCount = 0;
     private final PhysicsMath25D.Manifold manifoldScratch = new PhysicsMath25D.Manifold();
+    private final PhysicsMath25D.Point supportScratch = new PhysicsMath25D.Point();
 
     private final HashMap<PropType, VoxelModel> models = new HashMap<>();
     private final HashMap<String, Bitmap[]> voxelSpriteCache = new HashMap<>();
@@ -705,11 +708,11 @@ public final class PixelPhysicsVoxelView extends View {
             buildContacts();
 
             for(int iter=0;iter<VELOCITY_ITERS;iter++){
-                for(int i=0;i<contacts.size();i++)solveContactVelocity(contacts.get(i));
+                for(int i=0;i<activeContactCount;i++)solveContactVelocity(contacts.get(i));
             }
 
             for(int iter=0;iter<POSITION_ITERS;iter++){
-                for(int i=0;i<contacts.size();i++)solveContactPosition(contacts.get(i));
+                for(int i=0;i<activeContactCount;i++)solveContactPosition(contacts.get(i));
                 solveWorldPositions();
             }
 
@@ -744,42 +747,26 @@ public final class PixelPhysicsVoxelView extends View {
             if(p.x-ex<-ROOM){
                 float pen=-ROOM-(p.x-ex);
                 p.x+=pen;
-                if(p.vx<0f){
-                    float impact=-p.vx;
-                    p.vx=impact>RESTITUTION_THRESHOLD?impact*e:0f;
-                    applyWallFriction(p,mu,impact,true);
-                }
-                p.wake();
+                p.syncShape();
+                solveWallVelocity(p,1f,0f,e,mu);
             }
             if(p.x+ex>ROOM){
                 float pen=(p.x+ex)-ROOM;
                 p.x-=pen;
-                if(p.vx>0f){
-                    float impact=p.vx;
-                    p.vx=impact>RESTITUTION_THRESHOLD?-impact*e:0f;
-                    applyWallFriction(p,mu,impact,true);
-                }
-                p.wake();
+                p.syncShape();
+                solveWallVelocity(p,-1f,0f,e,mu);
             }
             if(p.y-ey<-ROOM){
                 float pen=-ROOM-(p.y-ey);
                 p.y+=pen;
-                if(p.vy<0f){
-                    float impact=-p.vy;
-                    p.vy=impact>RESTITUTION_THRESHOLD?impact*e:0f;
-                    applyWallFriction(p,mu,impact,false);
-                }
-                p.wake();
+                p.syncShape();
+                solveWallVelocity(p,0f,1f,e,mu);
             }
             if(p.y+ey>ROOM){
                 float pen=(p.y+ey)-ROOM;
                 p.y-=pen;
-                if(p.vy>0f){
-                    float impact=p.vy;
-                    p.vy=impact>RESTITUTION_THRESHOLD?-impact*e:0f;
-                    applyWallFriction(p,mu,impact,false);
-                }
-                p.wake();
+                p.syncShape();
+                solveWallVelocity(p,0f,-1f,e,mu);
             }
 
             float bottom=p.bottom();
@@ -801,24 +788,39 @@ public final class PixelPhysicsVoxelView extends View {
         }
     }
 
-    private void applyWallFriction(Prop p,float mu,float normalSpeed,boolean wallX) {
-        float maxDv=mu*normalSpeed;
-        if(wallX){
-            float tang=(float)Math.sqrt(p.vy*p.vy+p.vz*p.vz);
-            if(tang>1e-6f){
-                float dv=Math.min(tang,maxDv);
-                float s=(tang-dv)/tang;
-                p.vy*=s;p.vz*=s;
-            }
-        }else{
-            float tang=(float)Math.sqrt(p.vx*p.vx+p.vz*p.vz);
-            if(tang>1e-6f){
-                float dv=Math.min(tang,maxDv);
-                float s=(tang-dv)/tang;
-                p.vx*=s;p.vz*=s;
-            }
+    private void solveWallVelocity(Prop p,float nx,float ny,float e,float mu) {
+        // Wall normal points from the static wall into the body.
+        PhysicsMath25D.supportPoint(p.shape,-nx,-ny,supportScratch);
+        float rx=supportScratch.x-p.x;
+        float ry=supportScratch.y-p.y;
+
+        float cvx=p.vx-p.spin*ry;
+        float cvy=p.vy+p.spin*rx;
+        float vn=cvx*nx+cvy*ny;
+        if(vn>=0f)return;
+
+        float cross=rx*ny-ry*nx;
+        float denom=p.invMass()+cross*cross*p.invInertia();
+        if(denom<=1e-7f)return;
+
+        float impact=-vn;
+        float effectiveE=impact>RESTITUTION_THRESHOLD?e:0f;
+        float j=-(1f+effectiveE)*vn/denom;
+        applyXYImpulse(p,j*nx,j*ny,rx,ry);
+
+        // Coulomb friction at the same wall contact point.
+        cvx=p.vx-p.spin*ry;
+        cvy=p.vy+p.spin*rx;
+        float tx=-ny,ty=nx;
+        float vt=cvx*tx+cvy*ty;
+        float crossT=rx*ty-ry*tx;
+        float denomT=p.invMass()+crossT*crossT*p.invInertia();
+        if(denomT>1e-7f){
+            float jt=-vt/denomT;
+            float maxF=mu*j;
+            jt=clamp(jt,-maxF,maxF);
+            applyXYImpulse(p,jt*tx,jt*ty,rx,ry);
         }
-        p.spin*=Math.max(0f,1f-mu*0.08f);
     }
 
     private void applyGroundFriction(Prop p,float mu,float normalDeltaV) {
@@ -851,7 +853,7 @@ public final class PixelPhysicsVoxelView extends View {
     }
 
     private void buildContacts() {
-        contacts.clear();
+        activeContactCount=0;
         for(int i=0;i<props.size();i++)props.get(i).syncShape();
 
         for(int i=0;i<props.size();i++){
@@ -878,13 +880,14 @@ public final class PixelPhysicsVoxelView extends View {
                 float support=surfaceHeightAt(lower,upper.x,upper.y);
                 zPen=support-upper.bottom();
 
+                // Extruded-prism minimum-translation-axis rule:
+                // choose vertical separation only when it is cheaper than XY separation.
                 boolean topContact=zPen>0f
                         && upper.z>lower.z
                         && upper.bottom()>lower.bottom()+lower.halfH()*0.35f
-                        && (zPen<=manifoldScratch.penetration*1.35f
-                            || Math.abs(upper.vz-lower.vz)>0.10f);
+                        && zPen<=manifoldScratch.penetration+0.003f;
 
-                Contact ct=new Contact();
+                Contact ct=obtainContact();
                 ct.a=a;ct.b=b;
                 ct.cx=manifoldScratch.cx;ct.cy=manifoldScratch.cy;
 
@@ -904,9 +907,19 @@ public final class PixelPhysicsVoxelView extends View {
                     ct.nz=0f;
                     ct.penetration=manifoldScratch.penetration;
                 }
-                contacts.add(ct);
             }
         }
+    }
+
+    private Contact obtainContact() {
+        Contact c;
+        if(activeContactCount<contacts.size())c=contacts.get(activeContactCount);
+        else{
+            c=new Contact();
+            contacts.add(c);
+        }
+        activeContactCount++;
+        return c;
     }
 
     private float surfaceHeightAt(Prop lower,float worldX,float worldY) {
