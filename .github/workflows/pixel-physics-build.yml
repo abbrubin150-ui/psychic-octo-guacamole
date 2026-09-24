@@ -42,7 +42,7 @@ jobs:
 
   runtime-smoke:
     needs: build
-    runs-on: macos-13
+    runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - uses: actions/download-artifact@v4
@@ -56,6 +56,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
+          disable-linux-hw-accel: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
             adb install -r PixelPhysicsSandbox-MVP.apk
