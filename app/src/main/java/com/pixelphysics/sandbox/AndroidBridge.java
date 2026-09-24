@@ -11,7 +11,7 @@ import android.webkit.JavascriptInterface;
 import org.json.JSONObject;
 
 public final class AndroidBridge {
-    private static final String TAG = "VoxelDynamics";
+    private static final String TAG = "PixelPhysicsLab";
     private static final int MAX_SAVE_BYTES = 2_000_000;
 
     private final Context context;
@@ -89,7 +89,7 @@ public final class AndroidBridge {
     public String buildInfo() {
         try {
             JSONObject o = new JSONObject();
-            o.put("version", "0.8.1-voxel-dynamics");
+            o.put("version", "0.8.1-pixel-physics-lab");
             o.put("sdk", Build.VERSION.SDK_INT);
             o.put("device", Build.DEVICE);
             o.put("model", Build.MODEL);
