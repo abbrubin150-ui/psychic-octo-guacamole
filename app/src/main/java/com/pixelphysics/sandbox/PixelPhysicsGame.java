@@ -26,6 +26,8 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     private static final float FIXED_DT = 1f / 60f;
     private static final float MAX_ACCUM = 0.12f;
     private static final int MAX_OBJECTS = 100;
+    private static final int VIRTUAL_W = 480;
+    private static final int VIRTUAL_H = 270;
 
     private PerspectiveCamera camera;
     private ModelBatch modelBatch;
@@ -35,7 +37,19 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     private BitmapFont font;
     private FrameBuffer frameBuffer;
     private TextureRegion frameRegion;
-    private int renderDivisor = 2;
+    private final Matrix4 uiProjection = new Matrix4();
+    private float presentationScale = 1f;
+    private float presentationX = 0f;
+    private float presentationY = 0f;
+    private float presentationW = VIRTUAL_W;
+    private float presentationH = VIRTUAL_H;
+
+    private Texture mahoganyTex;
+    private Texture metalTex;
+    private Texture rubberTex;
+    private Texture floorTex;
+    private Texture workshopWoodTex;
+    private Texture darkMetalTex;
 
     private btDefaultCollisionConfiguration collisionConfig;
     private btCollisionDispatcher dispatcher;
@@ -96,6 +110,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     private float accumulator = 0f;
 
     private enum MaterialKind { MAHOGANY, METAL, RUBBER }
+    private enum PixelSurface { FLOOR, WOOD, DARK_METAL }
 
     private enum ObjectType {
         CUBE("Cube", 1.0f, 1.0f, 1.0f, false, MaterialKind.MAHOGANY, 1.0f),
@@ -190,16 +205,19 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         spriteBatch = new SpriteBatch();
         shapes = new ShapeRenderer();
         font = new BitmapFont();
-        font.getData().setScale(1.05f);
+        font.getData().setScale(0.72f);
+        font.getRegion().getTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
 
-        camera = new PerspectiveCamera(58f, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        createPixelTextures();
+
+        camera = new PerspectiveCamera(58f, VIRTUAL_W, VIRTUAL_H);
         camera.near = 0.1f;
         camera.far = 100f;
         updateCamera();
 
         environment = new Environment();
-        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.48f, 0.44f, 0.42f, 1f));
-        environment.add(new DirectionalLight().set(0.95f, 0.88f, 0.78f, -0.55f, -1f, -0.3f));
+        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.52f, 0.46f, 0.40f, 1f));
+        environment.add(new DirectionalLight().set(0.92f, 0.82f, 0.68f, -0.55f, -1f, -0.3f));
 
         collisionConfig = new btDefaultCollisionConfiguration();
         dispatcher = new btCollisionDispatcher(collisionConfig);
@@ -222,7 +240,129 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         if (!restoreWorld()) createStarterSet();
 
         recreateFrameBuffer();
+        updatePresentation();
         Gdx.input.setInputProcessor(this);
+    }
+
+    private void createPixelTextures() {
+        mahoganyTex = makeMahoganyTexture();
+        metalTex = makeMetalTexture();
+        rubberTex = makeRubberTexture();
+        floorTex = makeFloorTexture();
+        workshopWoodTex = makeWorkshopWoodTexture();
+        darkMetalTex = makeDarkMetalTexture();
+    }
+
+    private Texture finishPixelTexture(Pixmap p) {
+        Texture t = new Texture(p);
+        p.dispose();
+        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        t.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
+        return t;
+    }
+
+    private Texture makeMahoganyTexture() {
+        Pixmap p = new Pixmap(16,16, Pixmap.Format.RGBA8888);
+        Color base=Color.valueOf("6E2418"), dark=Color.valueOf("3C1512"), mid=Color.valueOf("963A20"),
+                light=Color.valueOf("C65C2D"), hi=Color.valueOf("E6813E");
+        p.setColor(base); p.fill();
+        for(int y=1;y<16;y+=4){ p.setColor(dark); p.drawLine(0,y,15,y); }
+        for(int y=2;y<16;y+=4){ p.setColor(mid); p.drawLine((y*3)%7,y,Math.min(15,(y*3)%7+7),y); }
+        for(int i=0;i<18;i++){
+            int x=(i*7+3)%16, y=(i*11+5)%16;
+            p.setColor((i%3)==0?hi:light); p.drawPixel(x,y);
+            if((i&1)==0 && x<15) p.drawPixel(x+1,y);
+        }
+        p.setColor(dark); p.drawRectangle(0,0,16,16);
+        return finishPixelTexture(p);
+    }
+
+    private Texture makeMetalTexture() {
+        Pixmap p = new Pixmap(16,16, Pixmap.Format.RGBA8888);
+        Color dark=Color.valueOf("252B31"), base=Color.valueOf("4A5660"), mid=Color.valueOf("71808A"),
+                light=Color.valueOf("A7B1B7"), hi=Color.valueOf("D6DADD");
+        p.setColor(base); p.fill();
+        for(int y=0;y<16;y++){
+            p.setColor((y%5)==0?dark:((y%5)==1?mid:base));
+            p.drawLine(0,y,15,y);
+        }
+        p.setColor(light); p.drawLine(2,3,12,3); p.drawLine(4,9,14,9);
+        p.setColor(hi); p.drawPixel(3,3); p.drawPixel(10,9); p.drawPixel(12,9);
+        p.setColor(dark);
+        p.drawPixel(1,1); p.drawPixel(14,1); p.drawPixel(1,14); p.drawPixel(14,14);
+        p.drawRectangle(0,0,16,16);
+        return finishPixelTexture(p);
+    }
+
+    private Texture makeRubberTexture() {
+        Pixmap p = new Pixmap(16,16, Pixmap.Format.RGBA8888);
+        Color dark=Color.valueOf("17201B"), base=Color.valueOf("28352B"), mid=Color.valueOf("3C4D3E"),
+                light=Color.valueOf("566D57");
+        p.setColor(base); p.fill();
+        for(int y=0;y<16;y++) for(int x=0;x<16;x++) {
+            int k=(x*5+y*7)%17;
+            if(k==0){ p.setColor(light); p.drawPixel(x,y); }
+            else if(k==1){ p.setColor(dark); p.drawPixel(x,y); }
+        }
+        p.setColor(mid); p.drawLine(1,4,14,4); p.drawLine(1,11,14,11);
+        p.setColor(dark); p.drawRectangle(0,0,16,16);
+        return finishPixelTexture(p);
+    }
+
+    private Texture makeFloorTexture() {
+        Pixmap p = new Pixmap(32,32, Pixmap.Format.RGBA8888);
+        Color dark=Color.valueOf("241512"), base=Color.valueOf("503022"), mid=Color.valueOf("6B4027"),
+                light=Color.valueOf("8A5530"), hi=Color.valueOf("A96C39");
+        p.setColor(base); p.fill();
+        for(int y=0;y<32;y+=8){ p.setColor(dark); p.drawLine(0,y,31,y); }
+        for(int band=0;band<4;band++){
+            int y=band*8;
+            int seam=(band%2==0)?12:22;
+            p.setColor(dark); p.drawLine(seam,y,seam,y+7);
+            p.setColor(light); p.drawLine(1,y+2,9,y+2); p.drawLine(17,y+5,29,y+5);
+            p.setColor(hi); p.drawPixel((band*9+5)%31,y+3);
+            p.setColor(mid); p.drawPixel((band*7+19)%31,y+6);
+        }
+        return finishPixelTexture(p);
+    }
+
+    private Texture makeWorkshopWoodTexture() {
+        Pixmap p = new Pixmap(16,16, Pixmap.Format.RGBA8888);
+        Color dark=Color.valueOf("2C1912"), base=Color.valueOf("5A321F"), mid=Color.valueOf("784526"),
+                light=Color.valueOf("9B6033");
+        p.setColor(base); p.fill();
+        for(int y=2;y<16;y+=5){ p.setColor(dark); p.drawLine(0,y,15,y); }
+        p.setColor(mid); p.drawLine(2,5,10,5); p.drawLine(6,12,15,12);
+        p.setColor(light); p.drawPixel(3,5); p.drawPixel(11,12); p.drawPixel(13,7);
+        p.setColor(dark); p.drawRectangle(0,0,16,16);
+        return finishPixelTexture(p);
+    }
+
+    private Texture makeDarkMetalTexture() {
+        Pixmap p = new Pixmap(16,16, Pixmap.Format.RGBA8888);
+        Color dark=Color.valueOf("141820"), base=Color.valueOf("252C36"), mid=Color.valueOf("394554"),
+                light=Color.valueOf("596879");
+        p.setColor(base); p.fill();
+        for(int x=0;x<16;x+=4){ p.setColor(mid); p.drawLine(x,0,x,15); }
+        p.setColor(light); p.drawPixel(2,2); p.drawPixel(13,2); p.drawPixel(2,13); p.drawPixel(13,13);
+        p.setColor(dark); p.drawRectangle(0,0,16,16);
+        return finishPixelTexture(p);
+    }
+
+    private Texture textureFor(MaterialKind kind) {
+        switch(kind){
+            case METAL: return metalTex;
+            case RUBBER: return rubberTex;
+            default: return mahoganyTex;
+        }
+    }
+
+    private Texture textureFor(PixelSurface surface) {
+        switch(surface){
+            case FLOOR: return floorTex;
+            case DARK_METAL: return darkMetalTex;
+            default: return workshopWoodTex;
+        }
     }
 
     private MaterialProfile profile(MaterialKind kind) {
@@ -267,15 +407,16 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     private void writeLE32(DataOutputStream d,int v) throws IOException { d.writeByte(v&255); d.writeByte((v>>>8)&255); d.writeByte((v>>>16)&255); d.writeByte((v>>>24)&255); }
 
     private void buildWorkshop() {
-        createStaticBox(12f, 0.4f, 12f, 0, -0.2f, 0, 0, Color.valueOf("4B4540"));
-        createStaticBox(4.2f, 0.35f, 2.5f, -2.2f, 1.15f, -2.0f, 0, Color.valueOf("5B4031"));
-        createStaticBox(1.8f, 0.3f, 2.2f, 3.0f, 0.7f, -1.2f, 0, Color.valueOf("544B44"));
-        createStaticBox(2.5f, 0.28f, 1.7f, 2.3f, 1.45f, 2.7f, 0, Color.valueOf("544B44"));
-        createStaticBox(2.7f, 0.3f, 1.3f, -2.7f, 0.45f, 2.8f, -18f, Color.valueOf("5B4031"));
-        createStaticBox(0.35f, 2.0f, 4.0f, 5.3f, 1.0f, 0f, 0, Color.valueOf("39383B"));
+        createStaticBox(12f, 0.4f, 12f, 0, -0.2f, 0, 0, PixelSurface.FLOOR);
+        createStaticBox(4.2f, 0.35f, 2.5f, -2.2f, 1.15f, -2.0f, 0, PixelSurface.WOOD);
+        createStaticBox(1.8f, 0.3f, 2.2f, 3.0f, 0.7f, -1.2f, 0, PixelSurface.WOOD);
+        createStaticBox(2.5f, 0.28f, 1.7f, 2.3f, 1.45f, 2.7f, 0, PixelSurface.WOOD);
+        createStaticBox(2.7f, 0.3f, 1.3f, -2.7f, 0.45f, 2.8f, -18f, PixelSurface.WOOD);
+        createStaticBox(0.35f, 2.0f, 4.0f, 5.3f, 1.0f, 0f, 0, PixelSurface.DARK_METAL);
+        createStaticBox(3.8f, 0.18f, 0.75f, 0f, 2.65f, -4.4f, 0, PixelSurface.DARK_METAL);
     }
 
-    private void createStaticBox(float w,float h,float d,float x,float y,float z,float rotZ, Color color) {
+    private void createStaticBox(float w,float h,float d,float x,float y,float z,float rotZ, PixelSurface surface) {
         StaticPiece p = new StaticPiece();
         p.shape = new btBoxShape(new Vector3(w/2f,h/2f,d/2f));
         Matrix4 tr = new Matrix4().idt().translate(x,y,z).rotate(Vector3.Z, rotZ);
@@ -287,7 +428,11 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         p.body.setFriction(0.82f);
         world.addRigidBody(p.body);
         ModelBuilder mb = new ModelBuilder();
-        p.model = mb.createBox(w,h,d,new Material(ColorAttribute.createDiffuse(color)), VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal);
+        Material mat = new Material(
+                ColorAttribute.createDiffuse(Color.WHITE),
+                TextureAttribute.createDiffuse(textureFor(surface)));
+        long attrs = VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal|VertexAttributes.Usage.TextureCoordinates;
+        p.model = mb.createBox(w,h,d,mat,attrs);
         p.instance = new ModelInstance(p.model, tr);
         staticPieces.add(p);
     }
@@ -323,9 +468,12 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         world.addRigidBody(o.body);
 
         ModelBuilder mb = new ModelBuilder();
-        Material material = new Material(ColorAttribute.createDiffuse(mp.color), FloatAttribute.createShininess(matKind==MaterialKind.METAL ? 22f : 5f));
-        long attrs = VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal;
-        if (type.sphere) o.model = mb.createSphere(type.w,type.h,type.d,14,10,material,attrs);
+        Material material = new Material(
+                ColorAttribute.createDiffuse(Color.WHITE),
+                TextureAttribute.createDiffuse(textureFor(matKind)),
+                FloatAttribute.createShininess(1f));
+        long attrs = VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal | VertexAttributes.Usage.TextureCoordinates;
+        if (type.sphere) o.model = mb.createSphere(type.w,type.h,type.d,10,7,material,attrs);
         else o.model = mb.createBox(type.w,type.h,type.d,material,attrs);
         o.instance = new ModelInstance(o.model, tr);
         objects.add(o); byId.put(o.id,o);
@@ -377,7 +525,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     }
 
     private Vector3 chooseSpawnPosition(ObjectType type) {
-        Ray ray = camera.getPickRay(Gdx.graphics.getWidth()/2f, Gdx.graphics.getHeight()/2f);
+        Ray ray = camera.getPickRay(VIRTUAL_W/2f, VIRTUAL_H/2f);
         RayHit hit = raycast(ray, 40f);
         Vector3 p = hit.hit ? hit.point.cpy() : ray.origin.cpy().mulAdd(ray.direction, 5f);
         p.y += type.h*0.5f + 0.35f;
@@ -446,7 +594,10 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         MaterialProfile mp=profile(kind);
         o.body.setFriction(mp.friction);
         o.body.setRestitution(mp.restitution);
-        if (o.instance.materials.size>0) o.instance.materials.get(0).set(ColorAttribute.createDiffuse(mp.color));
+        if (o.instance.materials.size>0) {
+            o.instance.materials.get(0).set(ColorAttribute.createDiffuse(Color.WHITE));
+            o.instance.materials.get(0).set(TextureAttribute.createDiffuse(textureFor(kind)));
+        }
     }
 
     private void updateGrabPhysics() {
@@ -534,12 +685,35 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
 
     private void recreateFrameBuffer() {
         if (frameBuffer!=null) frameBuffer.dispose();
-        int rw=Math.max(320,Gdx.graphics.getWidth()/Math.max(1,renderDivisor));
-        int rh=Math.max(180,Gdx.graphics.getHeight()/Math.max(1,renderDivisor));
-        frameBuffer=new FrameBuffer(Pixmap.Format.RGBA8888,rw,rh,true);
+        frameBuffer=new FrameBuffer(Pixmap.Format.RGBA8888,VIRTUAL_W,VIRTUAL_H,true);
         frameBuffer.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest,Texture.TextureFilter.Nearest);
         frameRegion=new TextureRegion(frameBuffer.getColorBufferTexture());
         frameRegion.flip(false,true);
+        uiProjection.setToOrtho2D(0,0,VIRTUAL_W,VIRTUAL_H);
+        updatePresentation();
+    }
+
+    private void updatePresentation() {
+        float raw=Math.min(Gdx.graphics.getWidth()/(float)VIRTUAL_W, Gdx.graphics.getHeight()/(float)VIRTUAL_H);
+        float integer=(float)Math.floor(raw);
+        presentationScale=integer>=1f?integer:raw;
+        presentationW=VIRTUAL_W*presentationScale;
+        presentationH=VIRTUAL_H*presentationScale;
+        presentationX=(Gdx.graphics.getWidth()-presentationW)*0.5f;
+        presentationY=(Gdx.graphics.getHeight()-presentationH)*0.5f;
+    }
+
+    private boolean insidePresentation(int sx,int sy) {
+        return sx>=presentationX && sx<=presentationX+presentationW &&
+               sy>=presentationY && sy<=presentationY+presentationH;
+    }
+
+    private int virtualX(int sx) {
+        return MathUtils.clamp(Math.round((sx-presentationX)/presentationScale),0,VIRTUAL_W-1);
+    }
+
+    private int virtualY(int sy) {
+        return MathUtils.clamp(Math.round((sy-presentationY)/presentationScale),0,VIRTUAL_H-1);
     }
 
     @Override
@@ -547,7 +721,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         float delta=Math.min(Gdx.graphics.getDeltaTime(),0.05f);
         if ((mode==Mode.GRAB || mode==Mode.CAMERA) && !contextTriggered && pressObject!=null && primaryPointer>=0) {
             float moved=Vector2.dst(downX,downY,px[primaryPointer],py[primaryPointer]);
-            if (moved<18f && (TimeUtils.nanoTime()-downNanos)>550_000_000L) {
+            if (moved<7f && (TimeUtils.nanoTime()-downNanos)>550_000_000L) {
                 contextTriggered=true;
                 contextObject=pressObject;
                 contextX=downX;
@@ -572,22 +746,27 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         processImpact();
 
         frameBuffer.begin();
-        Gdx.gl.glViewport(0,0,frameBuffer.getWidth(),frameBuffer.getHeight());
+        Gdx.gl.glViewport(0,0,VIRTUAL_W,VIRTUAL_H);
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
-        Gdx.gl.glClearColor(0.095f,0.085f,0.09f,1f);
+        Gdx.gl.glClearColor(0.055f,0.043f,0.046f,1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);
         modelBatch.begin(camera);
         for (StaticPiece p:staticPieces) modelBatch.render(p.instance,environment);
         for (PhysicsObject o:objects) modelBatch.render(o.instance,environment);
         modelBatch.end();
+
+        Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+        drawHud();
         frameBuffer.end();
 
+        updatePresentation();
         Gdx.gl.glViewport(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
-        Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+        Gdx.gl.glClearColor(0.015f,0.012f,0.015f,1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        spriteBatch.setProjectionMatrix(new Matrix4().setToOrtho2D(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight()));
         spriteBatch.begin();
-        spriteBatch.draw(frameRegion,0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
+        spriteBatch.draw(frameRegion,presentationX,presentationY,presentationW,presentationH);
         spriteBatch.end();
-        drawHud();
 
         autosaveClock+=delta;
         if (autosaveClock>3.0f) {
@@ -631,78 +810,124 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     }
 
     private void drawHud() {
-        int w=Gdx.graphics.getWidth(), h=Gdx.graphics.getHeight();
+        final int w=VIRTUAL_W, h=VIRTUAL_H;
+        shapes.setProjectionMatrix(uiProjection);
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(0.05f,0.045f,0.055f,0.80f);
-        shapes.rect(18,18,78,56);
-        shapes.rect(w-112,18,94,56);
-        shapes.rect(w-112,h-74,94,56);
+
+        drawPixelPanel(7,7,36,28, Color.valueOf("26303A"));
+        drawPixelPanel(w-60,7,53,28, Color.valueOf("26303A"));
+        drawPixelPanel(w-58,h-35,51,28, Color.valueOf("26303A"));
+
         if (mode==Mode.SPAWN) {
-            shapes.setColor(0.035f,0.032f,0.04f,0.95f);
-            shapes.rect(0,0,w,h*0.46f);
+            drawPixelPanel(0,0,w,122, Color.valueOf("1A161B"));
+            ObjectType[] vals=ObjectType.values();
+            int cols=4;
+            float cellW=w/(float)cols;
+            for(int i=0;i<vals.length;i++){
+                int row=i/cols,col=i%cols;
+                float x=col*cellW+4, y=8+(2-row)*30;
+                drawPixelPanel(x,y,cellW-8,25, Color.valueOf(i%2==0?"33241D":"2A2020"));
+                shapes.setColor(i%3==0?Color.valueOf("B94E2A"):(i%3==1?Color.valueOf("788692"):Color.valueOf("4E654D")));
+                shapes.rect(x+5,y+6,9,9);
+                shapes.setColor(Color.valueOf("E6C79C")); shapes.rect(x+6,y+7,3,3);
+            }
         }
+
         if (mode==Mode.SETTINGS) {
-            shapes.setColor(0.035f,0.032f,0.04f,0.95f);
-            shapes.rect(w-330,h-330,312,240);
+            drawPixelPanel(w-154,h-142,147,135, Color.valueOf("171A20"));
         }
+
         if (mode==Mode.CONTEXT) {
-            float cy=h-contextY;
-            shapes.setColor(0.04f,0.035f,0.045f,0.94f);
-            shapes.rect(contextX-120,cy-95,240,190);
+            float cx=MathUtils.clamp(contextX,68,w-68);
+            float cy=MathUtils.clamp(h-contextY,50,h-50);
+            drawPixelPanel(cx-66,cy-43,132,86, Color.valueOf("17151A"));
+            shapes.setColor(Color.valueOf("5A321F")); shapes.rect(cx-1,cy-42,2,84);
+            shapes.rect(cx-65,cy-1,130,2);
         }
+
+        drawObjectMarkers();
         shapes.end();
 
+        spriteBatch.setProjectionMatrix(uiProjection);
         spriteBatch.begin();
-        font.setColor(Color.WHITE);
-        font.draw(spriteBatch,"+",50,57);
-        font.draw(spriteBatch,"UNDO",w-100,53);
-        font.draw(spriteBatch,"MENU",w-100,h-38);
-        font.setColor(0.83f,0.72f,0.62f,1f);
-        font.draw(spriteBatch,"PIXEL PHYSICS",18,h-22);
+        pixelText("+",20,27,Color.WHITE);
+        pixelText("UNDO",w-53,25,Color.WHITE);
+        pixelText("MENU",w-52,h-17,Color.WHITE);
+        pixelText("PIXEL PHYSICS",8,h-8,Color.valueOf("F0C06A"));
+        pixelText("480x270 // TRUE PIXEL CANVAS",8,h-21,Color.valueOf("8C776B"));
+
         if (grabbed!=null) {
-            font.setColor(Color.WHITE);
-            font.draw(spriteBatch, grabbed.type.label+"  "+String.format(Locale.US,"%.1f kg",grabbed.mass),18,h-46);
+            pixelText(grabbed.type.label.toUpperCase()+"  "+String.format(Locale.US,"%.1f KG",grabbed.mass),8,h-34,Color.WHITE);
         }
+
         if (mode==Mode.SPAWN) drawSpawnText(spriteBatch,w,h);
         if (mode==Mode.SETTINGS) drawSettingsText(spriteBatch,w,h);
         if (mode==Mode.CONTEXT) drawContextText(spriteBatch,w,h);
         spriteBatch.end();
     }
 
+    private void drawPixelPanel(float x,float y,float w,float h,Color fill) {
+        shapes.setColor(Color.valueOf("09090C")); shapes.rect(x-2,y-2,w+4,h+4);
+        shapes.setColor(fill); shapes.rect(x,y,w,h);
+        shapes.setColor(Color.valueOf("6A5A50")); shapes.rect(x,y+h-1,w,1); shapes.rect(x,y,1,h);
+        shapes.setColor(Color.valueOf("101218")); shapes.rect(x,y,w,1); shapes.rect(x+w-1,y,1,h);
+    }
+
+    private void pixelText(String s,float x,float y,Color color) {
+        font.setColor(Color.valueOf("08080A"));
+        font.draw(spriteBatch,s,x+1,y-1);
+        font.setColor(color);
+        font.draw(spriteBatch,s,x,y);
+    }
+
+    private void drawObjectMarkers() {
+        for(PhysicsObject o:objects){
+            if(!o.frozen && o!=grabbed) continue;
+            Vector3 p=o.instance.transform.getTranslation(new Vector3());
+            camera.project(p,0,0,VIRTUAL_W,VIRTUAL_H);
+            float x=Math.round(p.x), y=Math.round(p.y);
+            Color col=o==grabbed?Color.valueOf("F4D35E"):Color.valueOf("70D6FF");
+            shapes.setColor(Color.valueOf("08080A"));
+            shapes.rect(x-7,y-7,15,2); shapes.rect(x-7,y+6,15,2);
+            shapes.rect(x-7,y-7,2,15); shapes.rect(x+6,y-7,2,15);
+            shapes.setColor(col);
+            shapes.rect(x-6,y-6,5,1); shapes.rect(x+2,y-6,5,1);
+            shapes.rect(x-6,y+5,5,1); shapes.rect(x+2,y+5,5,1);
+            shapes.rect(x-6,y-6,1,5); shapes.rect(x-6,y+2,1,5);
+            shapes.rect(x+5,y-6,1,5); shapes.rect(x+5,y+2,1,5);
+        }
+    }
+
     private void drawSpawnText(SpriteBatch b,int w,int h) {
-        font.setColor(Color.WHITE);
-        font.draw(b,"SPAWN",22,h*0.46f-18);
+        pixelText("SPAWN OBJECT",8,115,Color.valueOf("F0C06A"));
         ObjectType[] vals=ObjectType.values();
         int cols=4;
         float cellW=w/(float)cols;
-        float base=h*0.46f-52;
         for(int i=0;i<vals.length;i++) {
             int row=i/cols,col=i%cols;
-            font.setColor(i%2==0?Color.LIGHT_GRAY:Color.WHITE);
-            font.draw(b,vals[i].label,col*cellW+20,base-row*54);
+            float x=col*cellW+20;
+            float y=8+(2-row)*30+17;
+            pixelText(vals[i].label.toUpperCase(),x,y,Color.WHITE);
         }
-        font.setColor(Color.GRAY);
-        font.draw(b,"tap outside drawer to close",22,20);
     }
 
     private void drawSettingsText(SpriteBatch b,int w,int h) {
-        float x=w-310,y=h-118;
-        font.setColor(Color.WHITE);
-        font.draw(b,"WORKSHOP",x,y);
-        font.draw(b,"RESET WORLD",x,y-54);
-        font.draw(b,"HAPTICS: "+(haptics?"ON":"OFF"),x,y-104);
-        font.draw(b,"PIXEL SCALE: 1/"+renderDivisor,x,y-154);
-        font.setColor(Color.GRAY);
-        font.draw(b,"tap MENU to close",x,y-200);
+        float x=w-145,y=h-20;
+        pixelText("WORKSHOP",x,y,Color.valueOf("F0C06A"));
+        pixelText("RESET WORLD",x,y-31,Color.WHITE);
+        pixelText("HAPTICS: "+(haptics?"ON":"OFF"),x,y-59,Color.WHITE);
+        pixelText("PIXEL GRID: LOCKED",x,y-87,Color.valueOf("70D6FF"));
+        pixelText("480 x 270",x,y-103,Color.valueOf("8C9AA7"));
+        pixelText("MENU = CLOSE",x,y-120,Color.valueOf("776F72"));
     }
 
     private void drawContextText(SpriteBatch b,int w,int h) {
-        float cy=h-contextY;
-        font.setColor(Color.WHITE);
-        font.draw(b,contextObject!=null&&contextObject.frozen?"UNFREEZE":"FREEZE",contextX-100,cy+55);
-        font.draw(b,"DELETE",contextX+20,cy+55);
-        font.draw(b,"DUPLICATE",contextX-100,cy-35);
-        font.draw(b,"MATERIAL",contextX+20,cy-35);
+        float cx=MathUtils.clamp(contextX,68,w-68);
+        float cy=MathUtils.clamp(h-contextY,50,h-50);
+        pixelText(contextObject!=null&&contextObject.frozen?"UNFREEZE":"FREEZE",cx-58,cy+24,Color.valueOf("70D6FF"));
+        pixelText("DELETE",cx+9,cy+24,Color.valueOf("FF806C"));
+        pixelText("DUPLICATE",cx-58,cy-20,Color.WHITE);
+        pixelText("MATERIAL",cx+9,cy-20,Color.valueOf("F0C06A"));
     }
 
     private void saveWorld() {
@@ -710,14 +935,14 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         for(PhysicsObject o:objects) states.add(o.snapshot());
         prefs.putString("world",json.toJson(states,Array.class,SaveState.class));
         prefs.putBoolean("haptics",haptics);
-        prefs.putInteger("renderDivisor",renderDivisor);
+        prefs.putInteger("pixelCanvasWidth",VIRTUAL_W);
         prefs.flush();
     }
 
     @SuppressWarnings("unchecked")
     private boolean restoreWorld() {
         haptics=prefs.getBoolean("haptics",true);
-        renderDivisor=MathUtils.clamp(prefs.getInteger("renderDivisor",2),1,3);
+        // Pixel canvas is deliberately fixed; old render scale preferences are ignored.
         String data=prefs.getString("world","");
         if (data.isEmpty()) return false;
         try {
@@ -751,48 +976,42 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     @Override
     public boolean touchDown(int screenX,int screenY,int pointer,int button) {
         if (pointer>=px.length) return false;
+        if (!insidePresentation(screenX,screenY)) return false;
+        screenX=virtualX(screenX);
+        screenY=virtualY(screenY);
         px[pointer]=screenX;
         py[pointer]=screenY;
-        int w=Gdx.graphics.getWidth(),h=Gdx.graphics.getHeight();
+        int w=VIRTUAL_W,h=VIRTUAL_H;
 
         if (mode==Mode.SPAWN) {
-            if (screenY > h*0.54f) {
+            int drawerTop=h-122;
+            if (screenY>=drawerTop+22) {
                 int cols=4;
                 float cellW=w/(float)cols;
-                float localY=screenY-h*0.54f+52;
-                int row=(int)(localY/54f);
+                int row=MathUtils.clamp((int)((screenY-(drawerTop+22))/30f),0,2);
                 int col=MathUtils.clamp((int)(screenX/cellW),0,3);
                 int idx=row*cols+col;
                 ObjectType[] vals=ObjectType.values();
                 if(idx>=0&&idx<vals.length) spawnWithUndo(vals[idx]);
-                mode=Mode.IDLE;
-                return true;
             }
             mode=Mode.IDLE;
             return true;
         }
 
         if (mode==Mode.SETTINGS) {
-            float left=w-330;
-            if (screenX<left) {
+            float ux=screenX, uy=h-screenY;
+            if (ux<w-154 || uy<h-142) {
                 mode=Mode.IDLE;
                 return true;
             }
-            float yFromTop=screenY;
-            if (yFromTop>130 && yFromTop<195) {
+            if (uy>h-60 && uy<h-28) {
                 resetWorld();
                 mode=Mode.IDLE;
                 return true;
             }
-            if (yFromTop>=195 && yFromTop<250) {
+            if (uy>h-90 && uy<=h-60) {
                 haptics=!haptics;
                 feedbackClick();
-                saveWorld();
-                return true;
-            }
-            if (yFromTop>=250 && yFromTop<315) {
-                renderDivisor=renderDivisor==1?2:(renderDivisor==2?3:1);
-                recreateFrameBuffer();
                 saveWorld();
                 return true;
             }
@@ -815,16 +1034,16 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
             return true;
         }
 
-        if (screenX<108 && screenY>h-86) {
+        if (screenX<52 && screenY>h-42) {
             mode=Mode.SPAWN;
             feedbackClick();
             return true;
         }
-        if (screenX>w-125 && screenY>h-86) {
+        if (screenX>w-68 && screenY>h-42) {
             doUndo();
             return true;
         }
-        if (screenX>w-125 && screenY<86) {
+        if (screenX>w-68 && screenY<42) {
             mode=Mode.SETTINGS;
             feedbackClick();
             return true;
@@ -860,7 +1079,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
             } else {
                 mode=Mode.CAMERA;
                 long now=TimeUtils.nanoTime();
-                if (now-lastTapNanos<330_000_000L && Vector2.dst(tapX,tapY,screenX,screenY)<42f && hit.hit) {
+                if (now-lastTapNanos<330_000_000L && Vector2.dst(tapX,tapY,screenX,screenY)<18f && hit.hit) {
                     pivot.set(hit.point);
                     updateCamera();
                 }
@@ -876,13 +1095,15 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
     @Override
     public boolean touchDragged(int screenX,int screenY,int pointer) {
         if(pointer>=px.length) return false;
+        screenX=virtualX(screenX);
+        screenY=virtualY(screenY);
         px[pointer]=screenX;
         py[pointer]=screenY;
         if(mode==Mode.GRAB && grabbed!=null) {
             if(secondPointer>=0) {
                 float dist=distancePointers(primaryPointer,secondPointer);
                 float dd=dist-lastTwoDistance;
-                grabDepth=MathUtils.clamp(grabDepth+dd*0.009f,0.8f,20f);
+                grabDepth=MathUtils.clamp(grabDepth+dd*0.026f,0.8f,20f);
                 float a=anglePointers(primaryPointer,secondPointer);
                 float da=wrapAngle(a-lastTwoAngle);
                 accumulatedTwist+=da;
@@ -899,15 +1120,15 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
                 float my=(py[primaryPointer]+py[secondPointer])*0.5f;
                 float dx=mx-lastTwoMidX, dy=my-lastTwoMidY;
                 Vector3 right=tmp1.set(camera.direction).crs(camera.up).nor();
-                float panScale=orbitDistance*0.0016f;
+                float panScale=orbitDistance*0.0045f;
                 pivot.mulAdd(right,-dx*panScale).mulAdd(camera.up,dy*panScale);
                 lastTwoDistance=dist;
                 lastTwoMidX=mx;
                 lastTwoMidY=my;
             } else if(pointer==primaryPointer) {
                 float dx=screenX-lastPrimaryX,dy=screenY-lastPrimaryY;
-                orbitYaw-=dx*0.24f;
-                orbitPitch=MathUtils.clamp(orbitPitch+dy*0.20f,-12f,72f);
+                orbitYaw-=dx*0.78f;
+                orbitPitch=MathUtils.clamp(orbitPitch+dy*0.62f,-12f,72f);
                 lastPrimaryX=screenX;
                 lastPrimaryY=screenY;
             }
@@ -919,6 +1140,8 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
 
     @Override
     public boolean touchUp(int screenX,int screenY,int pointer,int button) {
+        screenX=virtualX(screenX);
+        screenY=virtualY(screenY);
         if(pointer<px.length){
             px[pointer]=screenX;
             py[pointer]=screenY;
@@ -967,10 +1190,10 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
 
     @Override
     public void resize(int width,int height) {
-        camera.viewportWidth=width;
-        camera.viewportHeight=height;
+        camera.viewportWidth=VIRTUAL_W;
+        camera.viewportHeight=VIRTUAL_H;
         updateCamera();
-        recreateFrameBuffer();
+        updatePresentation();
     }
 
     @Override
@@ -1000,6 +1223,12 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         if(spriteBatch!=null) spriteBatch.dispose();
         if(shapes!=null) shapes.dispose();
         if(font!=null) font.dispose();
+        if(mahoganyTex!=null) mahoganyTex.dispose();
+        if(metalTex!=null) metalTex.dispose();
+        if(rubberTex!=null) rubberTex.dispose();
+        if(floorTex!=null) floorTex.dispose();
+        if(workshopWoodTex!=null) workshopWoodTex.dispose();
+        if(darkMetalTex!=null) darkMetalTex.dispose();
         if(woodSound!=null)woodSound.dispose();
         if(metalSound!=null)metalSound.dispose();
         if(rubberSound!=null)rubberSound.dispose();
