@@ -704,12 +704,28 @@ public final class PixelPhysicsVoxelView extends View {
         }
 
         updateSleeping(dt);
+        sanitizePhysicsState();
 
         for(int i=0;i<props.size();i++){
             Prop p=props.get(i);
             if(p.z<-1f){
                 p.x=0f;p.y=0f;p.z=0.55f;
                 p.vx=p.vy=p.vz=p.spin=0f;
+                p.wake();
+            }
+        }
+    }
+
+    private void sanitizePhysicsState() {
+        for(int i=0;i<props.size();i++){
+            Prop p=props.get(i);
+            boolean finite=Float.isFinite(p.x)&&Float.isFinite(p.y)&&Float.isFinite(p.z)
+                    &&Float.isFinite(p.vx)&&Float.isFinite(p.vy)&&Float.isFinite(p.vz)
+                    &&Float.isFinite(p.yaw)&&Float.isFinite(p.spin);
+            if(!finite){
+                p.x=0f;p.y=0f;p.z=0.55f;
+                p.vx=p.vy=p.vz=p.spin=0f;
+                p.yaw=0f;
                 p.wake();
             }
         }
