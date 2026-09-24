@@ -10,6 +10,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.RenderProcessGoneDetail;
+import android.webkit.ConsoleMessage;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -84,6 +85,24 @@ public class AndroidLauncher extends Activity {
             @Override
             public @Nullable WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 return assetLoader.shouldInterceptRequest(request.getUrl());
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                android.util.Log.i("VoxelDynamics", "PAGE_FINISHED " + url);
+                super.onPageFinished(view, url);
+            }
+
+            @Override
+            public void onReceivedError(
+                    WebView view,
+                    WebResourceRequest request,
+                    android.webkit.WebResourceError error) {
+                android.util.Log.e(
+                        "VoxelDynamics",
+                        "WEB_ERROR " + request.getUrl() + " " + error.getDescription()
+                );
+                super.onReceivedError(view, request, error);
             }
 
             @Override
