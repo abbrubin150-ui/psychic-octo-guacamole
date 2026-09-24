@@ -10,7 +10,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.RenderProcessGoneDetail;
-import android.webkit.ConsoleMessage;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -24,7 +23,7 @@ import androidx.annotation.Nullable;
 import androidx.webkit.WebViewAssetLoader;
 
 public class AndroidLauncher extends Activity {
-    private static final String TAG = "PixelPhysicsV8";
+    private static final String TAG = "VoxelDynamics";
     private static final String APP_ORIGIN = "https://appassets.androidplatform.net";
     private WebView webView;
 
@@ -34,7 +33,6 @@ public class AndroidLauncher extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
         startWebRuntime();
     }
 
@@ -60,12 +58,14 @@ public class AndroidLauncher extends Activity {
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
         webView.addJavascriptInterface(new AndroidBridge(this), "AndroidBridge");
+
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onConsoleMessage(ConsoleMessage message) {
                 String text = "JS " + message.messageLevel() + " "
                         + message.message() + " @"
                         + message.sourceId() + ":" + message.lineNumber();
+
                 switch (message.messageLevel()) {
                     case ERROR:
                         Log.e(TAG, text);
@@ -83,13 +83,15 @@ public class AndroidLauncher extends Activity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
-            public @Nullable WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            public @Nullable WebResourceResponse shouldInterceptRequest(
+                    WebView view,
+                    WebResourceRequest request) {
                 return assetLoader.shouldInterceptRequest(request.getUrl());
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                android.util.Log.i("VoxelDynamics", "PAGE_FINISHED " + url);
+                Log.i(TAG, "PAGE_FINISHED " + url);
                 super.onPageFinished(view, url);
             }
 
@@ -97,39 +99,34 @@ public class AndroidLauncher extends Activity {
             public void onReceivedError(
                     WebView view,
                     WebResourceRequest request,
-                    android.webkit.WebResourceError error) {
-                android.util.Log.e(
-                        "VoxelDynamics",
-                        "WEB_ERROR " + request.getUrl() + " " + error.getDescription()
-                );
+                    WebResourceError error) {
+                Log.e(TAG, "WEB_ERROR code=" + error.getErrorCode()
+                        + " desc=" + error.getDescription()
+                        + " url=" + request.getUrl());
                 super.onReceivedError(view, request, error);
             }
 
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            public boolean shouldOverrideUrlLoading(
+                    WebView view,
+                    WebResourceRequest request) {
                 Uri u = request.getUrl();
                 return !("https".equals(u.getScheme())
                         && "appassets.androidplatform.net".equals(u.getHost()));
             }
 
             @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                super.onReceivedError(view, request, error);
-                Log.e(TAG, "WEB_ERROR code=" + error.getErrorCode()
-                        + " desc=" + error.getDescription()
-                        + " url=" + request.getUrl());
-            }
-
-            @Override
-            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+            public boolean onRenderProcessGone(
+                    WebView view,
+                    RenderProcessGoneDetail detail) {
                 Log.e(TAG, "WEBVIEW_RENDERER_GONE crash=" + detail.didCrash());
-                showNativeFatal("Renderer process stopped. Reopen Pixel Physics Lab.");
+                showNativeFatal("Renderer process stopped. Reopen Voxel Dynamics.");
                 return true;
             }
         });
 
         setContentView(webView);
-        Log.i(TAG, "HOST_START Pixel Physics Lab 0.8.1");
+        Log.i(TAG, "HOST_START Voxel Dynamics 0.8.1");
         webView.loadUrl(APP_ORIGIN + "/assets/www/index.html");
     }
 
@@ -148,14 +145,16 @@ public class AndroidLauncher extends Activity {
         fallback.setTextSize(18);
         fallback.setGravity(Gravity.CENTER);
         fallback.setPadding(40, 40, 40, 40);
-        fallback.setText("PIXEL PHYSICS LAB\n\n" + message);
+        fallback.setText("VOXEL DYNAMICS\n\n" + message);
         setContentView(fallback);
     }
 
     @Override
     protected void onPause() {
         if (webView != null) {
-            webView.evaluateJavascript("window.__onAppPause && window.__onAppPause()", null);
+            webView.evaluateJavascript(
+                    "window.__onAppPause && window.__onAppPause()",
+                    null);
             webView.onPause();
         }
         super.onPause();
@@ -166,7 +165,9 @@ public class AndroidLauncher extends Activity {
         super.onResume();
         if (webView != null) {
             webView.onResume();
-            webView.evaluateJavascript("window.__onAppResume && window.__onAppResume()", null);
+            webView.evaluateJavascript(
+                    "window.__onAppResume && window.__onAppResume()",
+                    null);
         }
     }
 
