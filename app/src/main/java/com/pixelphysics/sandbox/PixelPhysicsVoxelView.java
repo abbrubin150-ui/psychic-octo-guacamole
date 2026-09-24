@@ -295,6 +295,7 @@ public final class PixelPhysicsVoxelView extends View {
         // Accumulated sequential-impulse state, valid for one substep manifold.
         float normalImpulse;
         float frictionImpulseX,frictionImpulseY,frictionImpulseZ;
+        float torsionImpulse;
         boolean targetVelocityInitialized;
         float targetNormalVelocity;
     }
@@ -1274,10 +1275,12 @@ public final class PixelPhysicsVoxelView extends View {
         if(b==null && Math.abs(c.nz)>0.5f && Math.abs(a.spin)>0.0001f && c.normalImpulse>0f){
             float invI=a.invInertia();
             if(invI>1e-8f){
-                float desired=-a.spin/invI;
+                float lambdaTorsion=-a.spin/invI;
                 float limit=c.friction*c.normalImpulse*Math.max(0.01f,a.radius()*0.35f);
-                float angularImpulse=clamp(desired,-limit,limit);
-                a.spin+=angularImpulse*invI;
+                float oldTorsion=c.torsionImpulse;
+                c.torsionImpulse=clamp(oldTorsion+lambdaTorsion,-limit,limit);
+                float deltaTorsion=c.torsionImpulse-oldTorsion;
+                a.spin+=deltaTorsion*invI;
             }
         }
     }
