@@ -512,7 +512,7 @@ public class PixelPhysics25DGame extends ApplicationAdapter implements InputProc
 
     private Prop screenPick(float sx,float sy){
         Prop best=null;
-        float bestDepth=-999f;
+        float bestDepth=999f;
         for(Prop p:props){
             Vector2 q=p.body.getPosition();iso(q.x,q.y,p.z,tmpScreen);
             float halfW=Math.max(18f,(p.type.w+p.type.d)*11f);
