@@ -15,7 +15,7 @@ public class AndroidLauncher extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        gameView = new PixelPhysics25DView(this);
+        gameView = new PixelPhysicsVoxelView(this);
         setContentView(gameView);
     }
 
