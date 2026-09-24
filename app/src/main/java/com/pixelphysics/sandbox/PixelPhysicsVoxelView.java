@@ -292,10 +292,13 @@ public final class PixelPhysicsVoxelView extends View {
     private VoxelModel solidBox(int sx,int sy,int sz,boolean accentEdges) {
         VoxelModel m=new VoxelModel(sx,sy,sz);
         for(int z=0;z<sz;z++)for(int y=0;y<sy;y++)for(int x=0;x<sx;x++){
-            boolean surface=x==0||y==0||z==0||x==sx-1||y==sy-1||z==sz-1;
-            if(!surface) continue;
-            int tag=0;
-            if(accentEdges && ((x==0||x==sx-1)+(y==0||y==sy-1)+(z==0||z==sz-1)>=2)) tag=1;
+            int boundaries=0;
+            if(x==0||x==sx-1)boundaries++;
+            if(y==0||y==sy-1)boundaries++;
+            if(z==0||z==sz-1)boundaries++;
+            int tag=accentEdges&&boundaries>=2?1:0;
+            // Keep the full volume in the model. Internal voxels never emit faces,
+            // but they are required by the occupancy test to suppress internal faces.
             m.add(x,y,z,tag);
         }
         return m;
@@ -326,7 +329,11 @@ public final class PixelPhysicsVoxelView extends View {
         for(int z=0;z<s;z++)for(int y=0;y<s;y++)for(int x=0;x<s;x++){
             boolean shell=x==0||y==0||z==0||x==s-1||y==s-1||z==s-1;
             if(!shell)continue;
-            boolean edge=(x<3||x>=s-3)+(y<3||y>=s-3)+(z<3||z>=s-3)>=2;
+            int edgeBands=0;
+            if(x<3||x>=s-3)edgeBands++;
+            if(y<3||y>=s-3)edgeBands++;
+            if(z<3||z>=s-3)edgeBands++;
+            boolean edge=edgeBands>=2;
             boolean brace=(x==y||x+y==s-1) && (z==0||z==s-1);
             m.add(x,y,z,edge||brace?1:0);
         }
