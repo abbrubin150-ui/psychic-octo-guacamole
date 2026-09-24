@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 
-def gdxVersion = '1.13.1'
+def gdxVersion = '1.14.2'
 
 configurations { natives }
 
@@ -12,8 +12,8 @@ android {
         applicationId 'com.pixelphysics.sandbox'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '0.3.0-isometric-25d'
+        versionCode 4
+        versionName '0.3.1-isometric-25d-stable'
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
     }
 
