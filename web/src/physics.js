@@ -177,6 +177,27 @@ export class PhysicsKernel {
     return entity;
   }
 
+  removeEntity(entity) {
+    if (!entity || !this.entities.has(entity.id)) return;
+    try {
+      this.world.removeRigidBody(entity.body);
+    } finally {
+      entity.mesh?.parent?.remove(entity.mesh);
+      this.entities.delete(entity.id);
+    }
+  }
+
+  setFrozen(entity, frozen) {
+    if (!entity?.dynamic) return;
+    entity.frozen = !!frozen;
+    entity.body.setBodyType(
+      frozen ? RAPIER.RigidBodyType.Fixed : RAPIER.RigidBodyType.Dynamic,
+      true
+    );
+    entity.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    entity.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  }
+
   entityFromObject(object) {
     let o = object;
     while (o) {
