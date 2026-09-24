@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APK="${1:-VoxelDynamics-v8.1.apk}"
+APK="${1:-PixelPhysicsLab-v8.1.apk}"
 PKG="com.pixelphysics.sandbox"
 ACT="$PKG/.AndroidLauncher"
-LOG_TAG="VoxelDynamics"
+LOG_TAG="PixelPhysicsLab"
 
 adb install -r "$APK"
 adb logcat -c
@@ -31,7 +31,7 @@ READY=0
 for i in $(seq 1 50); do
   LOG="$(adb logcat -d -s "$LOG_TAG:V" 2>/dev/null || true)"
 
-  if grep -q "APP_READY Voxel Dynamics 0.8.1" <<<"$LOG"; then
+  if grep -q "APP_READY Pixel Physics Lab 0.8.1" <<<"$LOG"; then
     READY=1
     break
   fi
@@ -86,8 +86,8 @@ if adb logcat -d -s "$LOG_TAG:E" | grep -qE "BOOT_FATAL|fault|WEB_ERROR|WEBVIEW_
   exit 1
 fi
 
-adb logcat -d -s "$LOG_TAG:V" > voxel-dynamics-v81-metrics.txt || true
-adb exec-out screencap -p > voxel-dynamics-v81-smoke.png
-test -s voxel-dynamics-v81-smoke.png
+adb logcat -d -s "$LOG_TAG:V" > pixel-physics-lab-v81-metrics.txt || true
+adb exec-out screencap -p > pixel-physics-lab-v81-smoke.png
+test -s pixel-physics-lab-v81-smoke.png
 
 echo "RUNTIME_PASS PID=$PID"
