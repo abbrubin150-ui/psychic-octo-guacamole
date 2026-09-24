@@ -24,6 +24,11 @@ jobs:
         run: gradle --stacktrace :app:assembleDebug
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-MVP.apk
+      - name: Verify APK
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-MVP.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-MVP.apk | head -40
+          unzip -t PixelPhysicsSandbox-MVP.apk
       - uses: actions/upload-artifact@v4
         with:
           name: pixel-physics-apk
