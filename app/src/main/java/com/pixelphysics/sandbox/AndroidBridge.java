@@ -11,7 +11,7 @@ import android.webkit.JavascriptInterface;
 import org.json.JSONObject;
 
 public final class AndroidBridge {
-    private static final String TAG = "PixelPhysicsV8";
+    private static final String TAG = "VoxelDynamics";
     private static final int MAX_SAVE_BYTES = 2_000_000;
 
     private final Context context;
