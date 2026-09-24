@@ -26,3 +26,8 @@ Target/compile SDK: API 35
 CI additionally installs the APK on an Android 15 x86_64 emulator, launches the main activity, checks that the app process remains alive, checks the crash buffer, and captures a smoke-test screenshot using a managed Android 15 emulator runner.
 
 The verified APK artifact is produced independently of the optional emulator smoke job, so CI infrastructure around AVD boot cannot block delivery of a structurally verified install package.
+
+
+## True pixel-art renderer
+
+The game now renders the entire world and HUD into a fixed 480x270 pixel canvas before nearest-neighbor integer upscaling. Mahogany, metal, rubber, workshop wood, floor and dark-metal surfaces are authored as deterministic 16x16/32x32 pixel textures rather than smooth PBR materials. UI panels, object markers, menus and text are rendered on the same pixel canvas so the visual language is consistent end-to-end.
