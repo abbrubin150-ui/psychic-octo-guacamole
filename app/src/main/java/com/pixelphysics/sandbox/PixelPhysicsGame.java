@@ -10,6 +10,7 @@ import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.graphics.glutils.*;
 import com.badlogic.gdx.math.*;
+import com.badlogic.gdx.math.collision.Ray;
 import com.badlogic.gdx.physics.bullet.Bullet;
 import com.badlogic.gdx.physics.bullet.collision.*;
 import com.badlogic.gdx.physics.bullet.dynamics.*;
@@ -451,7 +452,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         Vector3 center = tmpM.getTranslation(new Vector3());
         Vector3 rel = current.cpy().sub(center);
         Vector3 vel = new Vector3();
-        grabbed.body.getLinearVelocity(vel);
+        vel.set(grabbed.body.getLinearVelocity());
 
         float massScale = (float)Math.pow(Math.max(0.25f,grabbed.mass),0.34);
         float kp = 62f*massScale;
@@ -494,7 +495,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         RayHit out=new RayHit();
         Vector3 from=ray.origin.cpy();
         Vector3 to=ray.origin.cpy().mulAdd(ray.direction,maxDist);
-        btCollisionWorld.ClosestRayResultCallback cb=new btCollisionWorld.ClosestRayResultCallback(from,to);
+        ClosestRayResultCallback cb=new ClosestRayResultCallback(from,to);
         world.rayTest(from,to,cb);
         if (cb.hasHit()) {
             float f=cb.getClosestHitFraction();
@@ -597,7 +598,7 @@ public class PixelPhysicsGame extends ApplicationAdapter implements InputProcess
         pendingImpactA=pendingImpactB=-1;
         if (src==null) return;
         Vector3 v=new Vector3();
-        src.body.getLinearVelocity(v);
+        v.set(src.body.getLinearVelocity());
         float speed=v.len();
         float now=(float)TimeUtils.nanoTime()/1_000_000_000f;
         if (speed<1.25f || now-src.lastImpactAt<0.09f) return;
