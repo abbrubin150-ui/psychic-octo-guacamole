@@ -1,7 +1,7 @@
-name: Pixel Physics Enterprise v8
+name: Pixel Physics Lab v8.1
 
 concurrency:
-  group: enterprise-v8-${{ github.ref }}
+  group: pixel-physics-lab-v81-${{ github.ref }}
   cancel-in-progress: true
 
 on:
@@ -28,7 +28,7 @@ jobs:
       - name: Run v8 contract tests
         run: npm test --prefix web
 
-      - name: Build local offline web runtime
+      - name: Build local offline runtime
         run: npm run build --prefix web
 
       - name: Verify generated runtime
@@ -36,6 +36,7 @@ jobs:
           test -s app/src/main/assets/www/index.html
           test -s app/src/main/assets/www/style.css
           test -s app/src/main/assets/www/game.js
+          grep -q "PIXEL PHYSICS LAB" app/src/main/assets/www/index.html
           grep -q "game.js" app/src/main/assets/www/index.html
 
       - uses: actions/setup-java@v5
@@ -56,37 +57,39 @@ jobs:
       - name: Run Android unit tests
         run: gradle --stacktrace :app:testDebugUnitTest
 
-      - name: Build Enterprise v8 APK
+      - name: Build Pixel Physics Lab APK
         run: gradle --stacktrace :app:assembleDebug
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-Enterprise-v8.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsLab-v8.1.apk
 
       - name: Verify signed self-contained APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-Enterprise-v8.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-Enterprise-v8.apk | head -40
-          unzip -t PixelPhysicsSandbox-Enterprise-v8.apk
-          unzip -l PixelPhysicsSandbox-Enterprise-v8.apk | grep -q "assets/www/game.js"
-          unzip -l PixelPhysicsSandbox-Enterprise-v8.apk | grep -q "assets/www/index.html"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsLab-v8.1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsLab-v8.1.apk | head -40
+          unzip -t PixelPhysicsLab-v8.1.apk
+          unzip -l PixelPhysicsLab-v8.1.apk | grep -q "assets/www/game.js"
+          unzip -l PixelPhysicsLab-v8.1.apk | grep -q "assets/www/index.html"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-physics-enterprise-v8-apk
-          path: PixelPhysicsSandbox-Enterprise-v8.apk
+          name: pixel-physics-lab-v81-apk
+          path: PixelPhysicsLab-v8.1.apk
           if-no-files-found: error
 
   runtime-smoke:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
-          name: pixel-physics-enterprise-v8-apk
+          name: pixel-physics-lab-v81-apk
           path: .
 
-      - name: Android 16 cold-start and interaction soak
+      - name: Android 16 APP_READY and interaction soak
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -94,54 +97,13 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            adb install -r PixelPhysicsSandbox-Enterprise-v8.apk
-            adb logcat -c
-            adb shell am force-stop com.pixelphysics.sandbox
-            adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
-            sleep 12
-
-            PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
-            echo "PID=$PID"
-            if [ -z "$PID" ]; then
-              adb logcat -d -b crash || true
-              adb logcat -d -v threadtime | tail -800 || true
-              exit 1
-            fi
-
-            # Exercise camera/object input paths. Coordinates are intentionally broad:
-            # the app is landscape and the gesture system uses fat-finger acquisition.
-            adb shell input swipe 500 450 760 400 700 || true
-            adb shell input swipe 850 500 1020 360 650 || true
-            adb shell input tap 600 420 || true
-            sleep 20
-
-            PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
-            if [ -z "$PID" ]; then
-              adb logcat -d -b crash || true
-              adb logcat -d -v threadtime | tail -800 || true
-              exit 1
-            fi
-
-            if adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
-              adb logcat -d -b crash
-              exit 1
-            fi
-
-            if adb logcat -d -s PixelPhysicsV8:E | grep -q "fault"; then
-              adb logcat -d -s PixelPhysicsV8:E
-              exit 1
-            fi
-
-            adb logcat -d -s PixelPhysicsV8:I > enterprise-v8-metrics.txt || true
-            adb exec-out screencap -p > enterprise-v8-smoke.png
-            test -s enterprise-v8-smoke.png
+          script: bash scripts/android-smoke-v8.sh PixelPhysicsLab-v8.1.apk
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pixel-physics-enterprise-v8-smoke
+          name: pixel-physics-lab-v81-smoke
           path: |
-            enterprise-v8-smoke.png
-            enterprise-v8-metrics.txt
+            pixel-physics-lab-v81-smoke.png
+            pixel-physics-lab-v81-metrics.txt
           if-no-files-found: ignore
