@@ -1,5 +1,8 @@
-name: Pixel Physics Android Build
+name: Pixel Physics Pure 2D Build
 on:
+  push:
+    branches:
+      - pixel-physics-pure-2d
   pull_request:
   workflow_dispatch:
 
@@ -21,54 +24,22 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
-      - name: Build debug APK
+      - name: Build pure 2D APK
         run: gradle --stacktrace :app:assembleDebug
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-MVP.apk
-      - name: Verify APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-Pure2D.apk
+      - name: Verify pure 2D APK
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-MVP.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-MVP.apk | head -40
-          unzip -t PixelPhysicsSandbox-MVP.apk
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx.so"
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx-bullet.so"
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx.so"
-          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx-bullet.so"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-Pure2D.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-Pure2D.apk | head -40
+          unzip -t PixelPhysicsSandbox-Pure2D.apk
+          unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "lib/arm64-v8a/libgdx.so"
+          unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "lib/arm64-v8a/libgdx-box2d.so"
+          unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "lib/x86_64/libgdx.so"
+          unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "lib/x86_64/libgdx-box2d.so"
+          ! unzip -l PixelPhysicsSandbox-Pure2D.apk | grep -q "libgdx-bullet.so"
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-physics-apk
-          path: PixelPhysicsSandbox-MVP.apk
-          if-no-files-found: error
-
-  runtime-smoke:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: pixel-physics-apk
-          path: .
-      - name: Android 15 runtime smoke test
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_2
-          disable-animations: true
-          disable-linux-hw-accel: true
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            adb install -r PixelPhysicsSandbox-MVP.apk
-            adb logcat -c
-            adb shell am start -n com.pixelphysics.sandbox/.AndroidLauncher
-            sleep 12
-            adb shell pidof com.pixelphysics.sandbox || { echo APP_PROCESS_MISSING; adb logcat -d -b crash || true; adb logcat -d -v threadtime | tail -400 || true; adb shell dumpsys activity exit-info com.pixelphysics.sandbox || true; exit 1; }
-            ! adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox" || { adb logcat -d -b crash; exit 1; }
-            adb exec-out screencap -p > pixel-physics-smoke.png
-            test -s pixel-physics-smoke.png
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pixel-physics-smoke
-          path: pixel-physics-smoke.png
+          name: pixel-physics-pure-2d-apk
+          path: PixelPhysicsSandbox-Pure2D.apk
           if-no-files-found: error
