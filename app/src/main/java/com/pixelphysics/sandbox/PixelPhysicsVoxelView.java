@@ -1287,6 +1287,8 @@ public final class PixelPhysicsVoxelView extends View {
 
     private void applyImpulse(Prop p,float ix,float iy,float iz,float rx,float ry) {
         if(p==null||p.frozen)return;
+        float impulse2=ix*ix+iy*iy+iz*iz;
+        if(p.sleeping && impulse2>1e-10f)p.wake();
         p.vx+=ix*p.invMass();
         p.vy+=iy*p.invMass();
         p.vz+=iz*p.invMass();
