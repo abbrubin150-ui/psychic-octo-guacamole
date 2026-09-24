@@ -29,6 +29,10 @@ final class PhysicsMath25D {
         }
     }
 
+    static final class Point {
+        float x, y;
+    }
+
     static final class Manifold {
         boolean hit;
         float nx, ny;
@@ -188,14 +192,16 @@ final class PhysicsMath25D {
             }
         }
 
-        float[] pa = support(a, bestNx, bestNy);
-        float[] pb = support(b, -bestNx, -bestNy);
+        float pax = supportX(a, bestNx, bestNy);
+        float pay = supportY(a, bestNx, bestNy);
+        float pbx = supportX(b, -bestNx, -bestNy);
+        float pby = supportY(b, -bestNx, -bestNy);
 
         out.hit = true;
         out.nx = bestNx; out.ny = bestNy;
         out.penetration = bestOverlap;
-        out.cx = (pa[0] + pb[0]) * 0.5f;
-        out.cy = (pa[1] + pb[1]) * 0.5f;
+        out.cx = (pax + pbx) * 0.5f;
+        out.cy = (pay + pby) * 0.5f;
         return true;
     }
 
@@ -208,11 +214,16 @@ final class PhysicsMath25D {
                 + Math.abs(ax * vx + ay * vy) * s.halfD;
     }
 
-    private static float[] support(Shape s, float nx, float ny) {
+    static void supportPoint(Shape s, float nx, float ny, Point out) {
         if (s.kind == CIRCLE) {
             float len = (float)Math.sqrt(nx * nx + ny * ny);
-            if (len < EPS) return new float[]{s.x, s.y};
-            return new float[]{s.x + nx / len * s.radius, s.y + ny / len * s.radius};
+            if (len < EPS) {
+                out.x = s.x; out.y = s.y;
+            } else {
+                out.x = s.x + nx / len * s.radius;
+                out.y = s.y + ny / len * s.radius;
+            }
+            return;
         }
 
         float c = (float)Math.cos(s.yaw), sn = (float)Math.sin(s.yaw);
@@ -220,10 +231,34 @@ final class PhysicsMath25D {
         float vx = -sn, vy = c;
         float su = (nx * ux + ny * uy) >= 0f ? 1f : -1f;
         float sv = (nx * vx + ny * vy) >= 0f ? 1f : -1f;
-        return new float[]{
-                s.x + ux * s.halfW * su + vx * s.halfD * sv,
-                s.y + uy * s.halfW * su + vy * s.halfD * sv
-        };
+        out.x = s.x + ux * s.halfW * su + vx * s.halfD * sv;
+        out.y = s.y + uy * s.halfW * su + vy * s.halfD * sv;
+    }
+
+    private static float supportX(Shape s, float nx, float ny) {
+        if (s.kind == CIRCLE) {
+            float len = (float)Math.sqrt(nx * nx + ny * ny);
+            return len < EPS ? s.x : s.x + nx / len * s.radius;
+        }
+        float c=(float)Math.cos(s.yaw), sn=(float)Math.sin(s.yaw);
+        float ux=c, vx=-sn;
+        float uy=sn, vy=c;
+        float su=(nx*ux+ny*uy)>=0f?1f:-1f;
+        float sv=(nx*vx+ny*vy)>=0f?1f:-1f;
+        return s.x+ux*s.halfW*su+vx*s.halfD*sv;
+    }
+
+    private static float supportY(Shape s, float nx, float ny) {
+        if (s.kind == CIRCLE) {
+            float len = (float)Math.sqrt(nx * nx + ny * ny);
+            return len < EPS ? s.y : s.y + ny / len * s.radius;
+        }
+        float c=(float)Math.cos(s.yaw), sn=(float)Math.sin(s.yaw);
+        float ux=c, vx=-sn;
+        float uy=sn, vy=c;
+        float su=(nx*ux+ny*uy)>=0f?1f:-1f;
+        float sv=(nx*vx+ny*vy)>=0f?1f:-1f;
+        return s.y+uy*s.halfW*su+vy*s.halfD*sv;
     }
 
     private static float clamp(float v, float lo, float hi) {
