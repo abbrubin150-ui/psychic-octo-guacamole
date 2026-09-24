@@ -99,7 +99,10 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          pre-emulator-launch-script: |
+            mkdir -p ~/.android
+            printf 'Vulkan = off\nGLDirectMem = on\n' > ~/.android/advancedFeatures.ini
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader -noaudio -no-boot-anim
           script: bash scripts/android-smoke-v8.sh PixelPhysicsLab-v8.1.apk
 
       - uses: actions/upload-artifact@v4
