@@ -1,5 +1,9 @@
 name: Pixel Physics Physics v7
 
+concurrency:
+  group: physics-v7-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
