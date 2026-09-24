@@ -141,33 +141,33 @@ public final class PixelPhysicsVoxelView extends View {
     private enum RenderKind { VOXEL, BALL }
 
     private enum PropType {
-        CUBE("CUBE", 18,18,18, 1.0f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
-        BEAM_SHORT("BEAM S", 40,10,10, 1.3f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
-        BEAM_LONG("BEAM L", 62,10,10, 2.0f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
-        PLANK("PLANK", 50,18,6, 1.2f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
-        WOOD_BALL("WOOD BALL", 18,18,18, 0.7f, MaterialKind.MAHOGANY, RenderKind.BALL),
-        METAL_BALL("METAL BALL", 18,18,18, 4.0f, MaterialKind.METAL, RenderKind.BALL),
-        WEIGHT("WEIGHT", 20,20,20, 10.0f, MaterialKind.METAL, RenderKind.VOXEL),
-        WHEEL("WHEEL", 26,8,26, 1.1f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
-        RUBBER_BALL("RUBBER", 20,20,20, 0.85f, MaterialKind.RUBBER, RenderKind.BALL),
-        BARREL("BARREL", 22,22,30, 3.6f, MaterialKind.METAL, RenderKind.VOXEL),
-        CRATE("CRATE", 24,24,24, 1.8f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
-        STAIRS("STAIRS", 48,26,26, 2.3f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
-        SPRING("SPRING", 14,14,34, 1.4f, MaterialKind.METAL, RenderKind.VOXEL);
+        CUBE("CUBE", 18,18,18, 1.00f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
+        BEAM_SHORT("BEAM S", 40,10,10, 1.00f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
+        BEAM_LONG("BEAM L", 62,10,10, 1.00f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
+        PLANK("PLANK", 50,18,6, 1.00f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
+        WOOD_BALL("WOOD BALL", 18,18,18, 1.00f, MaterialKind.MAHOGANY, RenderKind.BALL),
+        METAL_BALL("METAL BALL", 18,18,18, 1.00f, MaterialKind.METAL, RenderKind.BALL),
+        WEIGHT("WEIGHT", 20,20,20, 1.00f, MaterialKind.METAL, RenderKind.VOXEL),
+        WHEEL("WHEEL", 26,8,26, 0.38f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
+        RUBBER_BALL("RUBBER", 20,20,20, 1.00f, MaterialKind.RUBBER, RenderKind.BALL),
+        BARREL("BARREL", 22,22,30, 0.18f, MaterialKind.METAL, RenderKind.VOXEL),
+        CRATE("CRATE", 24,24,24, 0.35f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
+        STAIRS("STAIRS", 48,26,26, 0.50f, MaterialKind.MAHOGANY, RenderKind.VOXEL),
+        SPRING("SPRING", 14,14,34, 0.10f, MaterialKind.METAL, RenderKind.VOXEL);
 
         final String label;
         final int vx, vy, vz;
-        final float mass;
+        final float solidFraction;
         final MaterialKind defaultMaterial;
         final RenderKind renderKind;
 
-        PropType(String label, int vx, int vy, int vz, float mass,
+        PropType(String label, int vx, int vy, int vz, float solidFraction,
                  MaterialKind defaultMaterial, RenderKind renderKind) {
             this.label = label;
             this.vx = vx;
             this.vy = vy;
             this.vz = vz;
-            this.mass = mass;
+            this.solidFraction = solidFraction;
             this.defaultMaterial = defaultMaterial;
             this.renderKind = renderKind;
         }
@@ -175,6 +175,14 @@ public final class PixelPhysicsVoxelView extends View {
         float wMeters() { return vx * VOXEL_METERS; }
         float dMeters() { return vy * VOXEL_METERS; }
         float hMeters() { return vz * VOXEL_METERS; }
+
+        float volumeM3() {
+            if(renderKind==RenderKind.BALL){
+                float r=wMeters()*0.5f;
+                return (4f/3f)*(float)Math.PI*r*r*r;
+            }
+            return wMeters()*dMeters()*hMeters()*solidFraction;
+        }
     }
 
     private static final class Palette {
@@ -250,19 +258,24 @@ public final class PixelPhysicsVoxelView extends View {
             return type.renderKind==RenderKind.BALL || type==PropType.BARREL;
         }
 
+        float massKg() {
+            return Math.max(0.08f,materialDensity(material)*type.volumeM3());
+        }
+
         float invMass() {
-            return frozen ? 0f : 1f/Math.max(0.0001f,type.mass);
+            return frozen ? 0f : 1f/massKg();
         }
 
         float invInertia() {
             if(frozen) return 0f;
+            float mass=massKg();
             float inertia;
             if(circularFootprint()) {
                 float r=radius();
-                inertia=0.5f*type.mass*r*r;
+                inertia=0.5f*mass*r*r;
             } else {
                 float w=type.wMeters(),d=type.dMeters();
-                inertia=type.mass*(w*w+d*d)/12f;
+                inertia=mass*(w*w+d*d)/12f;
             }
             return inertia>1e-7f ? 1f/inertia : 0f;
         }
@@ -1111,6 +1124,14 @@ public final class PixelPhysicsVoxelView extends View {
         }
     }
 
+    private float materialDensity(MaterialKind m) {
+        // Representative bulk densities in kg/m^3.
+        // Mahogany varies by species/moisture; 700 is a useful mid-range value.
+        if(m==MaterialKind.METAL)return 7800f;
+        if(m==MaterialKind.RUBBER)return 1100f;
+        return 700f;
+    }
+
     private float restitution(MaterialKind m) {
         return m==MaterialKind.RUBBER?0.68f:(m==MaterialKind.METAL?0.08f:0.12f);
     }
@@ -1123,7 +1144,7 @@ public final class PixelPhysicsVoxelView extends View {
         if(mode!=Mode.GRAB||grabbed==null||grabbed.frozen)return;
         grabbed.wake();
 
-        float mass=Math.max(0.25f,grabbed.type.mass);
+        float mass=Math.max(0.25f,grabbed.massKg());
         // Near-critical spring: high enough to feel direct, damped enough not to inject energy.
         float stiffness=145f*(float)Math.pow(mass,0.24);
         float damping=2f*(float)Math.sqrt(stiffness*mass)*0.92f;
@@ -1390,7 +1411,8 @@ public final class PixelPhysicsVoxelView extends View {
         pixelText(c,"MENU",W-55,25,Color.WHITE);
 
         if(grabbed!=null) {
-            pixelText(c,grabbed.type.label+" / CARDINAL "+(directionIndex(grabbed.yaw)*90)+"°",8,39,Color.WHITE);
+            float shownMass=Math.round(grabbed.massKg()*10f)/10f;
+            pixelText(c,grabbed.type.label+" / "+shownMass+"kg / CARDINAL "+(directionIndex(grabbed.yaw)*90)+"°",8,39,Color.WHITE);
         }
         if(mode==Mode.SPAWN)drawSpawnDrawer(c);
         if(mode==Mode.SETTINGS)drawSettings(c);
