@@ -2,28 +2,69 @@ name: Pixel Physics Android Build
 on:
   pull_request:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android SDK 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
+      - name: Verify Android SDK
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
       - name: Build debug APK
         run: gradle --stacktrace :app:assembleDebug
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk PixelPhysicsSandbox-MVP.apk
+      - name: Verify APK
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PixelPhysicsSandbox-MVP.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging PixelPhysicsSandbox-MVP.apk | head -40
+          unzip -t PixelPhysicsSandbox-MVP.apk
+          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/arm64-v8a/libgdx-bullet.so"
+          unzip -l PixelPhysicsSandbox-MVP.apk | grep -q "lib/x86_64/libgdx-bullet.so"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: pixel-physics-apk
           path: PixelPhysicsSandbox-MVP.apk
           if-no-files-found: error
+
+  runtime-smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pixel-physics-apk
+          path: .
+      - name: Android 15 runtime smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r PixelPhysicsSandbox-MVP.apk
+            adb logcat -c
+            adb shell am start -W -n com.pixelphysics.sandbox/.AndroidLauncher
+            sleep 8
+            PID="$(adb shell pidof com.pixelphysics.sandbox | tr -d '\r')"
+            test -n "$PID"
+            if adb logcat -d -b crash | grep -q "com.pixelphysics.sandbox"; then
+              adb logcat -d -b crash
+              exit 1
+            fi
+            echo "Smoke test process PID: $PID"
