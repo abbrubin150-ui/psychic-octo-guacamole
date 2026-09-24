@@ -685,10 +685,12 @@ public final class PixelPhysicsVoxelView extends View {
             for(int iter=0;iter<POSITION_ITERATIONS;iter++){
                 collectContacts();
                 if(contacts.isEmpty())break;
+                sortContactsForSolver();
                 for(int i=0;i<contacts.size();i++)solvePosition(contacts.get(i));
             }
 
             collectContacts();
+            sortContactsForSolver();
             for(int iter=0;iter<VELOCITY_ITERATIONS;iter++){
                 for(int i=0;i<contacts.size();i++)solveVelocity(contacts.get(i));
             }
@@ -764,6 +766,21 @@ public final class PixelPhysicsVoxelView extends View {
                 addPairContact(a,b);
             }
         }
+    }
+
+    private void sortContactsForSolver() {
+        contacts.sort((c1,c2)->{
+            boolean vertical1=Math.abs(c1.nz)>0.5f;
+            boolean vertical2=Math.abs(c2.nz)>0.5f;
+            if(vertical1!=vertical2)return vertical1?-1:1;
+            if(vertical1){
+                int z=Float.compare(c1.pz,c2.pz);
+                if(z!=0)return z;
+            }
+            int aId=c1.a==null?Integer.MAX_VALUE:c1.a.id;
+            int bId=c2.a==null?Integer.MAX_VALUE:c2.a.id;
+            return Integer.compare(aId,bId);
+        });
     }
 
     private void addEnvironmentContacts(Prop p) {
