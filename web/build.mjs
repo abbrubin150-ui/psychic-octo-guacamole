@@ -23,7 +23,7 @@ await build({
 
 const rapierRoot = "node_modules/@dimforge/rapier3d-compat";
 let rapierModule = null;
-for (const candidate of ["rapier.es.js", "rapier.js"]) {
+for (const candidate of ["rapier.mjs", "rapier.es.js", "rapier.js"]) {
   try {
     await access(rapierRoot + "/" + candidate);
     rapierModule = candidate;
@@ -38,7 +38,7 @@ await copyFile("src/index.html", outDir + "/index.html");
 await copyFile("src/style.css", outDir + "/style.css");
 await copyFile(
   rapierRoot + "/" + rapierModule,
-  vendorDir + "/rapier.es.js"
+  vendorDir + "/rapier.mjs"
 );
 await copyFile(
   rapierRoot + "/rapier_wasm3d_bg.wasm",
