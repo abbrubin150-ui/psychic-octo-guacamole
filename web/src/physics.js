@@ -497,4 +497,3 @@ function materialRestitution(material) {
   }
 }
 
-export { RAPIER };
