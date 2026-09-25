@@ -126,7 +126,7 @@ public class AndroidLauncher extends Activity {
         });
 
         setContentView(webView);
-        Log.i(TAG, "HOST_START Pixel Physics Lab 0.8.1");
+        Log.i(TAG, "HOST_START Pixel Physics Lab 0.8.2");
         webView.loadUrl(APP_ORIGIN + "/assets/www/index.html");
     }
 
@@ -145,7 +145,7 @@ public class AndroidLauncher extends Activity {
         fallback.setTextSize(18);
         fallback.setGravity(Gravity.CENTER);
         fallback.setPadding(40, 40, 40, 40);
-        fallback.setText("VOXEL DYNAMICS\n\n" + message);
+        fallback.setText("PIXEL PHYSICS LAB\n\n" + message);
         setContentView(fallback);
     }
 
