@@ -89,7 +89,7 @@ public final class AndroidBridge {
     public String buildInfo() {
         try {
             JSONObject o = new JSONObject();
-            o.put("version", "0.8.1-pixel-physics-lab");
+            o.put("version", "0.8.2-pixel-physics-lab");
             o.put("sdk", Build.VERSION.SDK_INT);
             o.put("device", Build.DEVICE);
             o.put("model", Build.MODEL);
