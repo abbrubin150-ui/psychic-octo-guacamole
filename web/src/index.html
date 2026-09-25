@@ -15,7 +15,7 @@
       <div class="boot-card">
         <div class="boot-title" data-role="title">PIXEL PHYSICS LAB</div>
         <div class="boot-message" data-role="message">STARTING…</div>
-        <div class="boot-version">0.8.1</div>
+        <div class="boot-version">0.8.2</div>
       </div>
     </div>
 
@@ -39,6 +39,13 @@
       window.addEventListener("error", e => fail(e.message || e.error));
       window.addEventListener("unhandledrejection", e => fail(e.reason?.stack || e.reason));
     })();
+  </script>
+  <script type="importmap">
+    {
+      "imports": {
+        "@dimforge/rapier3d-compat": "./vendor/rapier.es.js"
+      }
+    }
   </script>
   <script type="module" src="game.js"></script>
 </body>
