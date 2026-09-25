@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { PhysicsKernel, ContactPointGrabber, RAPIER } from "./physics.js";
+import { PhysicsKernel, ContactPointGrabber } from "./physics.js";
 import { PointerFusion } from "./input.js";
 import { Telemetry } from "./telemetry.js";
 import { RENDER, SAVE_SCHEMA } from "./config.js";
@@ -16,7 +16,7 @@ function bootMessage(message) {
 function bootReady() {
   if (bootEl) bootEl.hidden = true;
   globalThis.__PIXEL_PHYSICS_LAB_READY__ = true;
-  globalThis.AndroidBridge?.log?.("info", "APP_READY Pixel Physics Lab 0.8.1");
+  globalThis.AndroidBridge?.log?.("info", "APP_READY Pixel Physics Lab 0.8.2");
 }
 
 function bootFatal(error) {
@@ -490,7 +490,7 @@ function captureState() {
   }
   return {
     schema: SAVE_SCHEMA,
-    version: "0.8.1-pixel-physics-lab",
+    version: "0.8.2-pixel-physics-lab",
     savedAt: Date.now(),
     camera: rig.snapshot(),
     objects
