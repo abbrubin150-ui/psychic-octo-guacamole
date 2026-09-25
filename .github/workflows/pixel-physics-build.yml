@@ -36,10 +36,10 @@ jobs:
           test -s app/src/main/assets/www/index.html
           test -s app/src/main/assets/www/style.css
           test -s app/src/main/assets/www/game.js
-          test -s app/src/main/assets/www/vendor/rapier.es.js
+          test -s app/src/main/assets/www/vendor/rapier.mjs
           test -s app/src/main/assets/www/vendor/rapier_wasm3d_bg.wasm
           grep -q "PIXEL PHYSICS LAB" app/src/main/assets/www/index.html
-          grep -q '"@dimforge/rapier3d-compat": "./vendor/rapier.es.js"' app/src/main/assets/www/index.html
+          grep -q '"@dimforge/rapier3d-compat": "./vendor/rapier.mjs"' app/src/main/assets/www/index.html
           grep -q 'type="module"' app/src/main/assets/www/index.html
           grep -q '@dimforge/rapier3d-compat' app/src/main/assets/www/game.js
           if grep -q "rapier_wasm3d_bg.wasm" app/src/main/assets/www/game.js; then
@@ -78,7 +78,7 @@ jobs:
           unzip -t PixelPhysicsLab-v8.2.apk
           unzip -l PixelPhysicsLab-v8.2.apk | grep -q "assets/www/game.js"
           unzip -l PixelPhysicsLab-v8.2.apk | grep -q "assets/www/index.html"
-          unzip -l PixelPhysicsLab-v8.2.apk | grep -q "assets/www/vendor/rapier.es.js"
+          unzip -l PixelPhysicsLab-v8.2.apk | grep -q "assets/www/vendor/rapier.mjs"
           unzip -l PixelPhysicsLab-v8.2.apk | grep -q "assets/www/vendor/rapier_wasm3d_bg.wasm"
 
       - uses: actions/upload-artifact@v4
