@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { PhysicsKernel, ContactPointGrabber, RAPIER } from "./physics.js";
 import { PointerFusion } from "./input.js";
 import { Telemetry } from "./telemetry.js";
-import { RENDER, SAVE_SCHEMA } from "./config.js";\nimport { OrthoRig, PixelPipeline } from "./view.js";
+import { RENDER, SAVE_SCHEMA } from "./config.js";
+import { OrthoRig, PixelPipeline } from "./view.js";
 
 const bootEl = document.querySelector("#boot");
 
