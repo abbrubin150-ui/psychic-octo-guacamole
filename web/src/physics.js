@@ -20,7 +20,7 @@ export class PhysicsKernel {
   }
 
   async init() {
-    const wasmUrl = new URL("rapier_wasm3d_bg.wasm", document.baseURI).toString();
+    const wasmUrl = new URL("vendor/rapier_wasm3d_bg.wasm", document.baseURI).toString();
     this.telemetry?.gauge("physics.wasm_url_length", wasmUrl.length);
     await RAPIER.init({ module_or_path: wasmUrl });
 
